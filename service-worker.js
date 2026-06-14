@@ -1,4 +1,4 @@
-const CACHE = "plu-auto-sync-v3-7f702efe2df5";
+const CACHE = "plu-auto-sync-compact-v4";
 const SHELL = [
   "./",
   "./index.html",

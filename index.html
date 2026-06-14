@@ -26,7 +26,9 @@
       <button id="clearBtn">Clear</button>
     </div>
 
-    <div class="filters">
+    <button id="advancedToggle" class="advanced-toggle" type="button" aria-expanded="false">Show filters & tools ▾</button>
+<div id="advancedControls" class="advanced-controls" hidden>
+<div class="filters">
       <button class="active" data-filter="all">All</button>
       <button data-filter="produce">Produce</button>
       <button data-filter="packaged">Packaged</button>
@@ -43,7 +45,8 @@
     </div>
   </section>
 
-  <section id="message" class="message" hidden></section>
+  </div>
+<section id="message" class="message" hidden></section>
   <section id="results" class="results"></section>
 </main>
 

@@ -1,1 +1,41 @@
 :root{--g:#087763;--gd:#075c4e;--lg:#e8f5e9;--b:#d6d6d6;--t:#1d1d1f;--m:#65676b;--bg:#f6f7f8}*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:var(--t);background:var(--bg)}header{background:linear-gradient(135deg,var(--g),var(--gd));color:#fff;padding:16px;display:flex;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:5;box-shadow:0 2px 8px #0002}h1{font-size:1.12rem;margin:0 0 3px}header p{margin:0;font-size:.82rem;opacity:.9}main{max-width:980px;margin:0 auto;padding:14px}.panel,.card{background:#fff;border:1px solid var(--b);border-radius:14px;box-shadow:0 2px 8px #0000000d}.panel{padding:14px}label{font-weight:800;display:block;margin-bottom:7px}.row{display:flex;gap:8px}input[type=search]{flex:1;min-width:0;font-size:1rem;padding:13px 12px;border-radius:10px;border:1px solid #bfc4c7}button,.upload{border:0;background:var(--g);color:#fff;border-radius:10px;padding:10px 13px;font-weight:800;cursor:pointer;text-align:center}.filters{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.filters button{background:#edf1f2;color:#273033;border:1px solid #d8dddf;border-radius:999px;padding:8px 11px;font-size:.86rem}.filters button.active{background:var(--g);color:#fff}.tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between;margin-top:12px;color:var(--m);font-size:.86rem}.link{background:transparent;color:var(--g);padding:0}.message{margin-top:14px;background:#fff8e1;border:1px solid #ffe082;border-radius:12px;padding:14px;color:#5f4700}.results{margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px}.card{overflow:hidden}.card.org{border-color:#189456}.top{display:flex;gap:12px;padding:12px}.thumb{width:74px;height:74px;flex:0 0 74px;border-radius:10px;border:1px solid #ddd;background:#f1f3f4;object-fit:cover}.placeholder{display:flex;align-items:center;justify-content:center;color:#8b8f93;font-size:.75rem;text-align:center}.name{margin:0 0 6px;font-size:1rem;line-height:1.2}.badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px}.badge{display:inline-flex;padding:3px 7px;border-radius:999px;background:#eef2f3;color:#344044;font-size:.72rem;font-weight:800}.badge.org{background:var(--lg);color:#08763d}.code{font-size:1rem;font-weight:900;word-break:break-all}.barcode{margin:0 12px 12px;border:1px solid #222;border-radius:6px;padding:8px;background:#fff;text-align:center;overflow-x:auto}.barcode svg{max-width:100%;height:auto}.actions{display:flex;border-top:1px solid var(--b)}.actions a,.actions button{flex:1;text-align:center;background:#fff;color:var(--g);text-decoration:none;border-radius:0;padding:11px 8px;border-right:1px solid var(--b);font-size:.88rem}.actions a:last-child,.actions button:last-child{border-right:0}footer{text-align:center;color:var(--m);font-size:.78rem;padding:18px 12px 28px}@media(max-width:540px){.results{grid-template-columns:1fr}.row{flex-direction:column}button,.upload{width:100%}.actions button,.actions a{width:auto}}
+.sync-status{color:#087763;font-weight:700;font-size:.82rem}.sync-status.warn{color:#9a6500}.sync-status.err{color:#a01818}
+
+
+/* Compact mobile controls */
+.advanced-toggle{
+  margin-top:10px;
+  width:100%;
+  background:#edf1f2;
+  color:#173b35;
+  border:1px solid #d8dddf;
+  padding:9px 11px;
+  border-radius:10px;
+  font-size:.9rem;
+}
+.advanced-controls[hidden]{display:none!important}
+.search.compact-mode,.panel.compact-mode{padding-bottom:10px}
+@media(max-width:540px){
+  header{padding:12px 14px}
+  h1{font-size:1rem}
+  header p{font-size:.76rem}
+  main{padding:10px}
+  .panel,.search{padding:10px}
+  label{margin-bottom:5px}
+  input[type=search]{padding:11px 12px}
+  .row{gap:6px}
+  .advanced-toggle{display:block}
+  .filters{margin-top:8px;gap:6px}
+  .filters button{width:auto;padding:7px 9px;font-size:.8rem}
+  .tools{gap:8px;margin-top:9px}
+  .tools .upload,.tools button{width:auto;padding:7px 9px;font-size:.8rem}
+  .tools span{font-size:.78rem}
+  .results{margin-top:10px;gap:9px}
+  .top{padding:10px}
+  .barcode{margin:0 10px 10px;padding:6px}
+  .thumb{width:62px;height:62px;flex-basis:62px}
+}
+@media(min-width:541px){
+  .advanced-toggle{display:none}
+  .advanced-controls[hidden]{display:block!important}
+}
