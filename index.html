@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#087763">
+<title>Nesters PLU Lookup</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div>
+    <h1>Nesters / Save-On PLU Lookup</h1>
+    <p>Search item, brand, quantity, PLU, UPC, or keyword.</p>
+  </div>
+  <button id="installBtn" hidden>Install</button>
+</header>
+
+<main>
+  <section class="panel">
+    <label for="q">Search</label>
+    <div class="row">
+      <input id="q" type="search" placeholder="banana, 4011, spinach, Taylor, 340 g..." autocomplete="off" autofocus>
+      <button id="clearBtn">Clear</button>
+    </div>
+
+    <div class="filters">
+      <button class="active" data-filter="all">All</button>
+      <button data-filter="produce">Produce</button>
+      <button data-filter="packaged">Packaged</button>
+      <button data-filter="organic">Organic</button>
+    </div>
+
+    <div class="tools">
+      <span id="count">Loading...</span>
+      <label class="upload">
+        Upload CSV
+        <input id="csvUpload" type="file" accept=".csv,text/csv" hidden>
+      </label>
+      <button id="resetBtn" class="link">Reset data</button>
+    </div>
+  </section>
+
+  <section id="message" class="message" hidden></section>
+  <section id="results" class="results"></section>
+</main>
+
+<footer>
+  Built-in data works directly from this file. To update, upload/replace CSV with columns: item_name, code, quantity, brand, category, type, image_local, image_url, notes.
+</footer>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
