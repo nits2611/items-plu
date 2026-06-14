@@ -20,7 +20,10 @@
 
 <main>
   <section class="panel">
-    <label for="q">Search</label>
+    <div class="search-header">
+      <label for="q">Search</label>
+      <span id="count">Loading...</span>
+    </div>
     <div class="row">
       <input id="q" type="search" placeholder="banana, 4011, spinach, Taylor, 340 g..." autocomplete="off" autofocus>
       <button id="clearBtn" type="button">Clear</button>
@@ -39,7 +42,6 @@
       </div>
 
       <div class="tools">
-        <span id="count">Loading...</span>
         <span id="syncStatus" class="sync-status">Checking data...</span>
         <label class="upload">
           Upload CSV

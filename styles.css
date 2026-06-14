@@ -56,3 +56,27 @@
 }
 .advanced-controls[hidden]{display:none!important}
 .advanced-controls{display:block}
+
+.search-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:6px;
+}
+
+.search-header label{
+    margin:0;
+    font-weight:700;
+}
+
+.search-header #count{
+    font-size:.85rem;
+    color:#666;
+    font-weight:600;
+}
+
+@media(max-width:540px){
+    .search-header #count{
+        font-size:.75rem;
+    }
+}
