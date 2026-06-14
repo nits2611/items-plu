@@ -161,7 +161,7 @@ function getResults() {
 function render() {
   const arr = getResults();
   results.innerHTML = "";
-  count.textContent = `${arr.length} shown / ${items.length} total`;
+  count.textContent = `${arr.length}/${items.length} items`;
 
   if (!arr.length) {
     show(`No matching item found${q.value.trim() ? ` for "${q.value.trim()}"` : ""}. Try item name, brand, quantity, PLU, UPC, or shorter keyword.`);
@@ -353,4 +353,28 @@ if ("serviceWorker" in navigator) {
   }).catch(() => {});
 }
 
+
+// Compact mobile filters/tools toggle
+function initAdvancedToggle() {
+  const advancedToggle = document.getElementById("advancedToggle");
+  const advancedControls = document.getElementById("advancedControls");
+  if (!advancedToggle || !advancedControls) return;
+
+  function setOpen(open) {
+    advancedControls.hidden = !open;
+    advancedToggle.setAttribute("aria-expanded", String(open));
+    advancedToggle.textContent = open ? "Hide filters & tools ▴" : "Show filters & tools ▾";
+    try { localStorage.setItem("plu_advanced_open", open ? "1" : "0"); } catch {}
+  }
+
+  const savedOpen = localStorage.getItem("plu_advanced_open") === "1";
+  setOpen(savedOpen);
+
+  advancedToggle.addEventListener("click", function (event) {
+    event.preventDefault();
+    setOpen(advancedControls.hidden);
+  });
+}
+
+initAdvancedToggle();
 loadInitialData();

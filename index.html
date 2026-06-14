@@ -23,30 +23,34 @@
     <label for="q">Search</label>
     <div class="row">
       <input id="q" type="search" placeholder="banana, 4011, spinach, Taylor, 340 g..." autocomplete="off" autofocus>
-      <button id="clearBtn">Clear</button>
+      <button id="clearBtn" type="button">Clear</button>
     </div>
 
-    <button id="advancedToggle" class="advanced-toggle" type="button" aria-expanded="false">Show filters & tools ▾</button>
-<div id="advancedControls" class="advanced-controls" hidden>
-<div class="filters">
-      <button class="active" data-filter="all">All</button>
-      <button data-filter="produce">Produce</button>
-      <button data-filter="packaged">Packaged</button>
-      <button data-filter="organic">Organic</button>
-    </div>
+    <button id="advancedToggle" class="advanced-toggle" type="button" aria-expanded="false">
+      Show filters & tools ▾
+    </button>
 
-    <div class="tools">
-      <span id="count">Loading...</span><span id="syncStatus" class="sync-status">Checking data...</span>
-      <label class="upload">
-        Upload CSV
-        <input id="csvUpload" type="file" accept=".csv,text/csv" hidden>
-      </label>
-      <button id="resetBtn" class="link">Reset data</button>
+    <div id="advancedControls" class="advanced-controls" hidden>
+      <div class="filters">
+        <button class="active" data-filter="all" type="button">All</button>
+        <button data-filter="produce" type="button">Produce</button>
+        <button data-filter="packaged" type="button">Packaged</button>
+        <button data-filter="organic" type="button">Organic</button>
+      </div>
+
+      <div class="tools">
+        <span id="count">Loading...</span>
+        <span id="syncStatus" class="sync-status">Checking data...</span>
+        <label class="upload">
+          Upload CSV
+          <input id="csvUpload" type="file" accept=".csv,text/csv" hidden>
+        </label>
+        <button id="resetBtn" class="link" type="button">Reset data</button>
+      </div>
     </div>
   </section>
 
-  </div>
-<section id="message" class="message" hidden></section>
+  <section id="message" class="message" hidden></section>
   <section id="results" class="results"></section>
 </main>
 

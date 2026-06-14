@@ -39,3 +39,20 @@
   .advanced-toggle{display:none}
   .advanced-controls[hidden]{display:block!important}
 }
+
+
+/* Fixed collapsible controls */
+.advanced-toggle{
+  display:block;
+  margin-top:10px;
+  width:100%;
+  background:#edf1f2;
+  color:#173b35;
+  border:1px solid #d8dddf;
+  padding:9px 11px;
+  border-radius:10px;
+  font-size:.9rem;
+  cursor:pointer;
+}
+.advanced-controls[hidden]{display:none!important}
+.advanced-controls{display:block}
