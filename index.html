@@ -1,66 +1,11 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#087763">
-<title>Nesters PLU Lookup</title>
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="styles.css">
-</head>
-<body>
-<header>
-  <div>
-    <h1>Nesters / Save-On PLU Lookup</h1>
-    <p>Search item, brand, quantity, PLU, UPC, or keyword.</p>
-  </div>
-  <button id="installBtn" hidden>Install</button>
-</header>
-
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#087763"><title>Nesters Produce Assistant</title><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/icon-192.png"><link rel="stylesheet" href="styles.css"></head><body>
+<header><div><h1>Nesters Produce Assistant</h1><p>Lookup, scan, favorite, recent items, and order list.</p></div><button id="installBtn" hidden>Install</button></header>
+<nav class="tabs"><button class="tab active" data-view="lookup">Lookup</button><button class="tab" data-view="favorites">Favorites</button><button class="tab" data-view="recent">Recent</button><button class="tab" data-view="order">Order</button></nav>
 <main>
-  <section class="panel">
-    <div class="search-header">
-      <label for="q">Search</label>
-      <span id="count">Loading...</span>
-    </div>
-    <div class="row">
-      <input id="q" type="search" placeholder="banana, 4011, spinach, Taylor, 340 g..." autocomplete="off" autofocus>
-      <button id="clearBtn" type="button">Clear</button>
-    </div>
-
-    <button id="advancedToggle" class="advanced-toggle" type="button" aria-expanded="false">
-      Show filters & tools ▾
-    </button>
-
-    <div id="advancedControls" class="advanced-controls" hidden>
-      <div class="filters">
-        <button class="active" data-filter="all" type="button">All</button>
-        <button data-filter="produce" type="button">Produce</button>
-        <button data-filter="packaged" type="button">Packaged</button>
-        <button data-filter="organic" type="button">Organic</button>
-      </div>
-
-      <div class="tools">
-        <span id="syncStatus" class="sync-status">Checking data...</span>
-        <label class="upload">
-          Upload CSV
-          <input id="csvUpload" type="file" accept=".csv,text/csv" hidden>
-        </label>
-        <button id="resetBtn" class="link" type="button">Reset data</button>
-      </div>
-    </div>
-  </section>
-
-  <section id="message" class="message" hidden></section>
-  <section id="results" class="results"></section>
+<section id="lookupView" class="view active"><section class="panel"><div class="search-header"><label for="q">Search</label><span id="count">Loading...</span></div><div class="search-box"><input id="q" type="search" placeholder="banana, eb spinach, 4011, Taylor, 340 g..." autocomplete="off" autofocus><button id="scanBtn" class="scan-btn" type="button" title="Scan barcode">📷</button></div><button id="advancedToggle" class="advanced-toggle" type="button" aria-expanded="false">Show filters & tools ▾</button><div id="advancedControls" class="advanced-controls" hidden><div class="filters"><button class="active" data-filter="all" type="button">All</button><button data-filter="produce" type="button">Produce</button><button data-filter="packaged" type="button">Packaged</button><button data-filter="organic" type="button">Organic</button></div><div class="tools"><span id="syncStatus" class="sync-status">Checking data...</span><label class="upload">Upload CSV <input id="csvUpload" type="file" accept=".csv,text/csv" hidden></label><button id="resetBtn" class="link" type="button">Reset data</button><button id="exportProfileBtn" class="link" type="button">Export Profile</button><label class="upload">Import Profile <input id="importProfile" type="file" accept=".json,application/json" hidden></label></div></div></section><section id="message" class="message" hidden></section><section id="results" class="results"></section></section>
+<section id="favoritesView" class="view"><section class="panel section-head"><h2>Favorites</h2><p>Store-specific quick list. Tap ☆ on any item to add/remove.</p></section><section id="favoritesResults" class="results"></section></section>
+<section id="recentView" class="view"><section class="panel section-head"><h2>Recently Used</h2><p>Automatically updated when you scan, copy, add to order, or open Save-On.</p><button id="clearRecentBtn" class="link" type="button">Clear Recent</button></section><section id="recentResults" class="results"></section></section>
+<section id="orderView" class="view"><section class="panel section-head"><h2>Today's Order</h2><p>Add item from Lookup, enter quantity, then scan barcode from phone into price gun.</p><div class="order-actions"><button id="exportOrderBtn" type="button">Export Order CSV</button><button id="clearOrderBtn" class="danger" type="button">Clear Order</button></div></section><section id="orderResults" class="order-list"></section></section>
 </main>
-
-<footer>
-  Built-in data works directly from this file. To update, upload/replace CSV with columns: item_name, code, quantity, brand, category, type, image_local, image_url, notes.
-</footer>
-
-<script src="data.js"></script>
-<script src="app.js"></script>
-</body>
-</html>
+<div id="scannerModal" class="scanner-modal" hidden><div class="scanner-card"><div class="scanner-head"><h2>Scan Barcode</h2><button id="closeScannerBtn" type="button">Close</button></div><video id="scannerVideo" playsinline></video><p id="scannerStatus">Point camera at barcode.</p></div></div>
+<footer>Data source: <code>items.csv</code>. Replace CSV on GitHub to sync updates.</footer><script src="data.js"></script><script src="app.js"></script></body></html>
