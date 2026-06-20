@@ -134,3 +134,37 @@
     bottom:160px;
   }
 }
+
+
+/* UX v4: filter button beside camera + remove qty zero support */
+.filter-btn{
+  border-radius:0;
+  background:#fff;
+  color:#087763;
+  border-left:1px solid #d7dcde;
+  font-size:1.05rem;
+  padding:8px 12px;
+  min-width:42px;
+}
+.search-box .scan-btn,
+.search-box .filter-btn{
+  flex:0 0 auto;
+}
+.advanced-toggle{
+  display:none!important;
+}
+.mobile-bottom-ui main{
+  padding-bottom:132px;
+}
+@media(max-width:640px){
+  body.mobile-bottom-ui #lookupView .panel{
+    bottom:43px;
+  }
+  body.mobile-bottom-ui .advanced-controls{
+    max-height:32vh;
+    overflow:auto;
+  }
+  body.mobile-bottom-ui .toast{
+    bottom:126px;
+  }
+}

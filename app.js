@@ -16,10 +16,19 @@ function isFav(code){return favs().includes(code)}function touch(code){let r=rec
 function toggleFav(code){let f=favs();f=f.includes(code)?f.filter(x=>x!==code):[code,...f];setJSON(key("favorites"),f);renderAll()}
 function addOrder(item, qty, silent = false) {
   qty = String(qty || "").trim();
+
   if (!qty || Number(qty) <= 0) {
-    if (!silent) toast("Enter quantity first");
+    const before = order();
+    const after = before.filter(x => x.code !== item.code);
+    setJSON(key("order"), after);
+    touch(item.code);
+    renderOrder();
+    renderFavorites();
+    renderRecent();
+    if (!silent && before.length !== after.length) toast(`${item.item_name} removed from order`);
     return;
   }
+
   let current = order().filter(x => x.code !== item.code);
   current.unshift({
     code: item.code,
@@ -96,7 +105,12 @@ function card(x) {
     const qty = qtyInput.value.trim();
 
     if (!qty || Number(qty) <= 0) {
-      saveStatus.textContent = "";
+      saveStatus.textContent = "Removed";
+      saveStatus.classList.remove("saved");
+      saveTimer = setTimeout(() => {
+        addOrder(x, qty, true);
+        saveStatus.textContent = "";
+      }, 350);
       return;
     }
 
@@ -112,11 +126,14 @@ function card(x) {
 
   qtyInput.addEventListener("change", () => {
     const qty = qtyInput.value.trim();
+    clearTimeout(saveTimer);
+    addOrder(x, qty, true);
     if (qty && Number(qty) > 0) {
-      clearTimeout(saveTimer);
-      addOrder(x, qty, true);
       saveStatus.textContent = "Saved";
       saveStatus.classList.add("saved");
+    } else {
+      saveStatus.textContent = "";
+      saveStatus.classList.remove("saved");
     }
   });
 
@@ -156,7 +173,7 @@ function code128SVG(v){v=String(v).trim();const numeric=/^\d+$/.test(v)&&v.lengt
 function show(t){msg.hidden=false;msg.textContent=t}function hide(){msg.hidden=true;msg.textContent=""}function setSync(t,l=""){syncStatus.textContent=t;syncStatus.className="sync-status "+l}
 function switchView(v){document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.getElementById(v+"View").classList.add("active");renderAll()}
 q.addEventListener("input",renderLookup);document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>switchView(t.dataset.view));document.querySelectorAll(".filters button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".filters button").forEach(x=>x.classList.remove("active"));b.classList.add("active");filter=b.dataset.filter;renderLookup()});
-function initAdvancedToggle(){const btn=document.getElementById("advancedToggle"),controls=document.getElementById("advancedControls");if(!btn||!controls)return;function set(open){controls.hidden=!open;btn.setAttribute("aria-expanded",String(open));btn.textContent=open?"Hide filters & tools ▴":"Show filters & tools ▾";localStorage.setItem("plu_advanced_open",open?"1":"0")}set(localStorage.getItem("plu_advanced_open")==="1");btn.onclick=e=>{e.preventDefault();set(controls.hidden)}}
+function initAdvancedToggle(){const btn=document.getElementById("advancedToggle"),controls=document.getElementById("advancedControls");if(!btn||!controls)return;function set(open){controls.hidden=!open;btn.setAttribute("aria-expanded",String(open));btn.textContent = open ? "✕" : "⚙️";localStorage.setItem("plu_advanced_open",open?"1":"0")}set(localStorage.getItem("plu_advanced_open")==="1");btn.onclick=e=>{e.preventDefault();set(controls.hidden)}}
 document.getElementById("csvUpload")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const text=await f.text(),hash=await sha256Short(text);localStorage.setItem(STORAGE_CSV,text);localStorage.setItem(STORAGE_HASH,hash);setItemsFromCSV(text);setSync(`Uploaded CSV loaded (${items.length} items).`)});
 document.getElementById("resetBtn").onclick=()=>{localStorage.removeItem(STORAGE_CSV);localStorage.removeItem(STORAGE_HASH);items=rowsToItems(window.DEFAULT_ITEMS||[]);renderAll();checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear today's order?")){setJSON(key("order"),[]);renderOrder()}};
 document.getElementById("exportOrderBtn").onclick=()=>downloadCSV("today-order.csv",["item_name,code,quantity",...order().map(o=>`"${(o.item_name||"").replaceAll('"','""')}",${o.code},"${String(o.qty).replaceAll('"','""')}"`)].join("\n"));document.getElementById("exportProfileBtn").onclick=()=>{const data={favorites:favs(),recent:recents(),order:order(),exportedAt:new Date().toISOString()};downloadFile("plu-profile.json",JSON.stringify(data,null,2),"application/json")};document.getElementById("importProfile")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(data.favorites)setJSON(key("favorites"),data.favorites);if(data.recent)setJSON(key("recent"),data.recent);if(data.order)setJSON(key("order"),data.order);renderAll()});
