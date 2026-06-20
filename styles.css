@@ -73,3 +73,64 @@
   .qty-input{padding:8px 9px}
   .toast{bottom:72px}
 }
+
+
+/* UX v3: auto-save quantity and mobile bottom controls */
+.order-badge{display:none!important}
+.qty-line{
+  grid-template-columns:auto minmax(70px,1fr) auto;
+}
+.save-status{
+  min-width:52px;
+  font-size:.75rem;
+  font-weight:800;
+  color:#777;
+}
+.save-status.saved{
+  color:#08763d;
+}
+.order-inline{
+  margin-top:-2px;
+}
+.mobile-bottom-ui main{
+  padding-bottom:178px;
+}
+@media(max-width:640px){
+  body.mobile-bottom-ui .tabs{
+    position:fixed;
+    top:auto;
+    bottom:0;
+    left:0;
+    right:0;
+    z-index:40;
+    box-shadow:0 -2px 10px #0002;
+    border-top:1px solid var(--b);
+    border-bottom:0;
+  }
+  body.mobile-bottom-ui #lookupView .panel{
+    position:fixed;
+    left:8px;
+    right:8px;
+    bottom:43px;
+    z-index:39;
+    border-radius:14px 14px 10px 10px;
+    box-shadow:0 -2px 14px #0002;
+  }
+  body.mobile-bottom-ui .advanced-toggle{
+    margin-top:7px;
+    padding:7px 9px;
+    font-size:.8rem;
+  }
+  body.mobile-bottom-ui .search-box input{
+    padding:10px 11px;
+  }
+  body.mobile-bottom-ui .results{
+    margin-bottom:8px;
+  }
+  body.mobile-bottom-ui footer{
+    padding-bottom:182px;
+  }
+  body.mobile-bottom-ui .toast{
+    bottom:160px;
+  }
+}

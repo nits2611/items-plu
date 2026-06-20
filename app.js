@@ -14,10 +14,10 @@ function getJSON(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{re
 const key=n=>`plu_${STORE}_${n}`;const favs=()=>getJSON(key("favorites"),[]);const recents=()=>getJSON(key("recent"),[]);const order=()=>getJSON(key("order"),[]);
 function isFav(code){return favs().includes(code)}function touch(code){let r=recents().filter(x=>x!==code);r.unshift(code);setJSON(key("recent"),r.slice(0,30))}
 function toggleFav(code){let f=favs();f=f.includes(code)?f.filter(x=>x!==code):[code,...f];setJSON(key("favorites"),f);renderAll()}
-function addOrder(item, qty) {
+function addOrder(item, qty, silent = false) {
   qty = String(qty || "").trim();
   if (!qty || Number(qty) <= 0) {
-    toast("Enter quantity first");
+    if (!silent) toast("Enter quantity first");
     return;
   }
   let current = order().filter(x => x.code !== item.code);
@@ -29,8 +29,10 @@ function addOrder(item, qty) {
   });
   setJSON(key("order"), current);
   touch(item.code);
-  renderAll();
-  toast(`${item.item_name} added to order: ${qty}`);
+  renderOrder();
+  renderFavorites();
+  renderRecent();
+  if (!silent) toast(`${item.item_name} added to order: ${qty}`);
 }
 
 function getOrderQty(code) {
@@ -65,7 +67,7 @@ function card(x) {
   e.className = "card " + (isOrg(x) ? "org" : "");
   const existingQty = getOrderQty(x.code);
 
-  e.innerHTML = `<div class="top"><div class="thumb placeholder">No image</div><div><h2 class="name"></h2><div class="badges"></div><div class="code"></div></div></div><div class="barcode"></div><div class="order-inline"><span class="order-badge" ${existingQty ? "" : "hidden"}>📦 Order Qty: <b></b></span><div class="qty-line"><label>Qty</label><input class="qty-input" type="number" inputmode="decimal" min="0" step="1" placeholder="0"><button class="add" type="button"></button></div></div><div class="actions"><button class="fav" type="button"></button><button class="copy" type="button">Copy</button><a target="_blank" rel="noopener">Save-On</a></div>`;
+  e.innerHTML = `<div class="top"><div class="thumb placeholder">No image</div><div><h2 class="name"></h2><div class="badges"></div><div class="code"></div></div></div><div class="barcode"></div><div class="order-inline"><div class="qty-line"><label>Qty</label><input class="qty-input" type="number" inputmode="decimal" min="0" step="1" placeholder="0"><span class="save-status"></span></div></div><div class="actions"><button class="fav" type="button"></button><button class="copy" type="button">Copy</button><a target="_blank" rel="noopener">Save-On</a></div>`;
 
   e.querySelector(".name").textContent = x.item_name;
   e.querySelector(".code").textContent = x.code;
@@ -80,14 +82,43 @@ function card(x) {
       badges.appendChild(s);
     });
 
-  const orderBadge = e.querySelector(".order-badge");
-  if (existingQty) orderBadge.querySelector("b").textContent = existingQty;
-
   const qtyInput = e.querySelector(".qty-input");
+  const saveStatus = e.querySelector(".save-status");
   qtyInput.value = existingQty || "";
+  if (existingQty) {
+    saveStatus.textContent = "Saved";
+    saveStatus.classList.add("saved");
+  }
 
-  const addBtn = e.querySelector(".add");
-  addBtn.textContent = existingQty ? "Update" : "Add";
+  let saveTimer = null;
+  qtyInput.addEventListener("input", () => {
+    clearTimeout(saveTimer);
+    const qty = qtyInput.value.trim();
+
+    if (!qty || Number(qty) <= 0) {
+      saveStatus.textContent = "";
+      return;
+    }
+
+    saveStatus.textContent = "Saving...";
+    saveStatus.classList.remove("saved");
+
+    saveTimer = setTimeout(() => {
+      addOrder(x, qty, true);
+      saveStatus.textContent = "Saved";
+      saveStatus.classList.add("saved");
+    }, 450);
+  });
+
+  qtyInput.addEventListener("change", () => {
+    const qty = qtyInput.value.trim();
+    if (qty && Number(qty) > 0) {
+      clearTimeout(saveTimer);
+      addOrder(x, qty, true);
+      saveStatus.textContent = "Saved";
+      saveStatus.classList.add("saved");
+    }
+  });
 
   const src = x.image_local || x.image_url;
   if (src) {
@@ -105,8 +136,6 @@ function card(x) {
   fav.textContent = isFav(x.code) ? "★" : "☆";
   fav.className = "fav " + (isFav(x.code) ? "fav-on" : "");
   fav.onclick = () => toggleFav(x.code);
-
-  addBtn.onclick = () => addOrder(x, qtyInput.value);
 
   e.querySelector(".copy").onclick = async () => {
     try { await navigator.clipboard.writeText(x.code); } catch {}
@@ -134,4 +163,12 @@ document.getElementById("exportOrderBtn").onclick=()=>downloadCSV("today-order.c
 function downloadCSV(n,t){downloadFile(n,t,"text/csv")}function downloadFile(n,t,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type}));a.download=n;a.click();URL.revokeObjectURL(a.href)}
 async function startScanner(){if(!("BarcodeDetector" in window)){alert("Camera barcode scanner is not supported in this browser. Try Android Chrome. Bluetooth scanner can still type into search.");return}const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),status=document.getElementById("scannerStatus");modal.hidden=false;status.textContent="Opening camera...";try{scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});video.srcObject=scannerStream;await video.play();const detector=new BarcodeDetector({formats:["code_128","ean_13","upc_a","upc_e","ean_8"]});status.textContent="Point camera at barcode.";scannerTimer=setInterval(async()=>{try{const codes=await detector.detect(video);if(codes.length){const val=codes[0].rawValue;stopScanner();q.value=val;touch(val);switchView("lookup");renderLookup();if(!getResults().length)show(`Scanned ${val}, but item was not found. Add it to CSV later or search Save-On.`)}}catch{}},500)}catch(e){status.textContent="Camera unavailable. Check permission/HTTPS."}}
 function stopScanner(){const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo");modal.hidden=true;if(scannerTimer)clearInterval(scannerTimer);scannerTimer=null;if(scannerStream)scannerStream.getTracks().forEach(t=>t.stop());scannerStream=null;video.srcObject=null}
-document.getElementById("scanBtn").onclick=startScanner;document.getElementById("closeScannerBtn").onclick=stopScanner;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;document.getElementById("installBtn").hidden=false});document.getElementById("installBtn").onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById("installBtn").hidden=true}};if("serviceWorker" in navigator)navigator.serviceWorker.register("service-worker.js").then(r=>r.update?.()).catch(()=>{});initAdvancedToggle();loadInitialData();
+document.getElementById("scanBtn").onclick=startScanner;document.getElementById("closeScannerBtn").onclick=stopScanner;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;document.getElementById("installBtn").hidden=false});document.getElementById("installBtn").onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById("installBtn").hidden=true}};if("serviceWorker" in navigator)navigator.serviceWorker.register("service-worker.js").then(r=>r.update?.()).catch(()=>{});
+function initMobileBottomUI() {
+  const isMobile = window.matchMedia("(max-width: 640px)").matches;
+  document.body.classList.toggle("mobile-bottom-ui", isMobile);
+}
+window.addEventListener("resize", initMobileBottomUI);
+initMobileBottomUI();
+
+initAdvancedToggle();loadInitialData();
