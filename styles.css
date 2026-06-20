@@ -168,3 +168,71 @@
     bottom:126px;
   }
 }
+
+
+/* UX v5: personal branding + top data tools */
+.header-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.top-tools-btn{
+  background:rgba(255,255,255,.15);
+  border:1px solid rgba(255,255,255,.45);
+  color:#fff;
+  min-width:42px;
+}
+.top-tools-panel{
+  position:sticky;
+  top:62px;
+  z-index:45;
+  padding:8px 10px 0;
+}
+.top-tools-panel[hidden]{display:none!important}
+.top-tools-card{
+  max-width:980px;
+  margin:0 auto;
+  background:#fff;
+  border:1px solid var(--b);
+  border-radius:14px;
+  box-shadow:0 4px 16px #0002;
+  padding:10px;
+}
+.top-tools-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:8px;
+}
+.top-tools-grid{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.top-tools-grid .upload,
+.top-tools-grid button{
+  width:auto;
+  padding:7px 10px;
+  font-size:.82rem;
+}
+.top-tools-grid .sync-status{
+  flex:1 1 100%;
+}
+.advanced-controls .tools{
+  display:none!important;
+}
+@media(max-width:640px){
+  .top-tools-panel{
+    top:56px;
+    padding:6px 8px 0;
+  }
+  .top-tools-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+  }
+  .top-tools-grid .sync-status{
+    grid-column:1 / -1;
+  }
+}

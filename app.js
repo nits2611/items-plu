@@ -188,4 +188,22 @@ function initMobileBottomUI() {
 window.addEventListener("resize", initMobileBottomUI);
 initMobileBottomUI();
 
+
+function initTopTools() {
+  const btn = document.getElementById("topToolsBtn");
+  const panel = document.getElementById("topToolsPanel");
+  const close = document.getElementById("closeTopToolsBtn");
+  if (!btn || !panel) return;
+
+  function setOpen(open) {
+    panel.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+    btn.textContent = open ? "✕" : "⚙️";
+  }
+
+  btn.addEventListener("click", () => setOpen(panel.hidden));
+  close?.addEventListener("click", () => setOpen(false));
+}
+
+initTopTools();
 initAdvancedToggle();loadInitialData();
