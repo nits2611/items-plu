@@ -14,7 +14,44 @@ function getJSON(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{re
 const key=n=>`plu_${STORE}_${n}`;const favs=()=>getJSON(key("favorites"),[]);const recents=()=>getJSON(key("recent"),[]);const order=()=>getJSON(key("order"),[]);
 function isFav(code){return favs().includes(code)}function touch(code){let r=recents().filter(x=>x!==code);r.unshift(code);setJSON(key("recent"),r.slice(0,30))}
 function toggleFav(code){let f=favs();f=f.includes(code)?f.filter(x=>x!==code):[code,...f];setJSON(key("favorites"),f);renderAll()}
-function addOrder(item){const qty=prompt(`Quantity for ${item.item_name}:`,"");if(!qty)return;let o=order().filter(x=>x.code!==item.code);o.unshift({code:item.code,qty,item_name:item.item_name,addedAt:new Date().toISOString()});setJSON(key("order"),o);touch(item.code);renderAll();switchView("order")}
+function addOrder(item, qty) {
+  qty = String(qty || "").trim();
+  if (!qty || Number(qty) <= 0) {
+    toast("Enter quantity first");
+    return;
+  }
+  let current = order().filter(x => x.code !== item.code);
+  current.unshift({
+    code: item.code,
+    qty,
+    item_name: item.item_name,
+    addedAt: new Date().toISOString()
+  });
+  setJSON(key("order"), current);
+  touch(item.code);
+  renderAll();
+  toast(`${item.item_name} added to order: ${qty}`);
+}
+
+function getOrderQty(code) {
+  const found = order().find(x => x.code === code);
+  return found ? found.qty : "";
+}
+
+function toast(text) {
+  let el = document.getElementById("toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "toast";
+    el.className = "toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.classList.add("show");
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
+}
+
 function isOrg(x){return /(^ORG\b|ORGANIC)/i.test(x.item_name)}function isPackaged(x){return x.code.length>6||/packaged|upc/i.test(x.type)}
 function getResults(){let a=items,terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);if(filter==="produce")a=a.filter(x=>!isPackaged(x));if(filter==="packaged")a=a.filter(isPackaged);if(filter==="organic")a=a.filter(isOrg);if(terms.length)a=a.filter(x=>terms.every(t=>x.hay.includes(t)||x.item_name.toLowerCase().includes(t)||x.code.toLowerCase().includes(t)));return a.slice(0,100)}
 function byCodes(codes){return codes.map(c=>items.find(x=>x.code===c)).filter(Boolean)}
@@ -23,7 +60,68 @@ function renderLookup(){const a=getResults();results.innerHTML="";count.textCont
 function renderFavorites(){const box=document.getElementById("favoritesResults");box.innerHTML="";const a=byCodes(favs());if(!a.length){box.innerHTML='<section class="message">No favorites yet. Tap ☆ on an item.</section>';return}a.forEach(x=>box.appendChild(card(x)))}
 function renderRecent(){const box=document.getElementById("recentResults");box.innerHTML="";const a=byCodes(recents());if(!a.length){box.innerHTML='<section class="message">No recent items yet.</section>';return}a.forEach(x=>box.appendChild(card(x)))}
 function renderOrder(){const box=document.getElementById("orderResults");box.innerHTML="";const o=order();if(!o.length){box.innerHTML='<section class="message">No order items yet. Add items from Lookup.</section>';return}o.forEach(row=>{const item=items.find(x=>x.code===row.code)||row;const e=document.createElement("article");e.className="order-item";e.innerHTML=`<div class="order-row"><div><h3></h3><div class="code"></div></div><div class="qty"></div></div><div class="barcode"></div><div class="actions"><button type="button">Edit Qty</button><button type="button">Remove</button></div>`;e.querySelector("h3").textContent=item.item_name;e.querySelector(".code").textContent=row.code;e.querySelector(".qty").textContent=row.qty;e.querySelector(".barcode").appendChild(code128SVG(row.code));e.querySelectorAll("button")[0].onclick=()=>{const q=prompt("Quantity:",row.qty);if(q){let arr=order();arr=arr.map(x=>x.code===row.code?{...x,qty:q}:x);setJSON(key("order"),arr);renderOrder()}};e.querySelectorAll("button")[1].onclick=()=>{setJSON(key("order"),order().filter(x=>x.code!==row.code));renderOrder()};box.appendChild(e)})}
-function card(x){const e=document.createElement("article");e.className="card "+(isOrg(x)?"org":"");e.innerHTML=`<div class="top"><div class="thumb placeholder">No image</div><div><h2 class="name"></h2><div class="badges"></div><div class="code"></div></div></div><div class="barcode"></div><div class="actions"><button class="fav" type="button"></button><button class="add" type="button">+ Order</button><button class="copy" type="button">Copy</button><a target="_blank" rel="noopener">Save-On</a></div>`;e.querySelector(".name").textContent=x.item_name;e.querySelector(".code").textContent=x.code;const badges=e.querySelector(".badges");[x.brand,x.quantity,x.category,isOrg(x)?"Organic":"",isPackaged(x)?"Packaged":"Produce"].filter(Boolean).forEach(b=>{const s=document.createElement("span");s.className="badge "+(b==="Organic"?"org":"");s.textContent=b;badges.appendChild(s)});const src=x.image_local||x.image_url;if(src){const img=document.createElement("img");img.className="thumb";img.alt=x.item_name;img.src=src;img.onerror=()=>img.replaceWith(placeholder());e.querySelector(".thumb").replaceWith(img)}e.querySelector(".barcode").appendChild(code128SVG(x.code));const fav=e.querySelector(".fav");fav.textContent=isFav(x.code)?"★":"☆";fav.className="fav "+(isFav(x.code)?"fav-on":"");fav.onclick=()=>toggleFav(x.code);e.querySelector(".add").onclick=()=>addOrder(x);e.querySelector(".copy").onclick=async()=>{try{await navigator.clipboard.writeText(x.code)}catch{}touch(x.code);e.querySelector(".copy").textContent="Copied";setTimeout(()=>e.querySelector(".copy").textContent="Copy",900);renderRecent()};const a=e.querySelector("a");a.href=SAVE_ON_BASE+encodeURIComponent(x.code);a.onclick=()=>touch(x.code);return e}
+function card(x) {
+  const e = document.createElement("article");
+  e.className = "card " + (isOrg(x) ? "org" : "");
+  const existingQty = getOrderQty(x.code);
+
+  e.innerHTML = `<div class="top"><div class="thumb placeholder">No image</div><div><h2 class="name"></h2><div class="badges"></div><div class="code"></div></div></div><div class="barcode"></div><div class="order-inline"><span class="order-badge" ${existingQty ? "" : "hidden"}>📦 Order Qty: <b></b></span><div class="qty-line"><label>Qty</label><input class="qty-input" type="number" inputmode="decimal" min="0" step="1" placeholder="0"><button class="add" type="button"></button></div></div><div class="actions"><button class="fav" type="button"></button><button class="copy" type="button">Copy</button><a target="_blank" rel="noopener">Save-On</a></div>`;
+
+  e.querySelector(".name").textContent = x.item_name;
+  e.querySelector(".code").textContent = x.code;
+
+  const badges = e.querySelector(".badges");
+  [x.brand, x.quantity, x.category, isOrg(x) ? "Organic" : "", isPackaged(x) ? "Packaged" : "Produce"]
+    .filter(Boolean)
+    .forEach(b => {
+      const s = document.createElement("span");
+      s.className = "badge " + (b === "Organic" ? "org" : "");
+      s.textContent = b;
+      badges.appendChild(s);
+    });
+
+  const orderBadge = e.querySelector(".order-badge");
+  if (existingQty) orderBadge.querySelector("b").textContent = existingQty;
+
+  const qtyInput = e.querySelector(".qty-input");
+  qtyInput.value = existingQty || "";
+
+  const addBtn = e.querySelector(".add");
+  addBtn.textContent = existingQty ? "Update" : "Add";
+
+  const src = x.image_local || x.image_url;
+  if (src) {
+    const img = document.createElement("img");
+    img.className = "thumb";
+    img.alt = x.item_name;
+    img.src = src;
+    img.onerror = () => img.replaceWith(placeholder());
+    e.querySelector(".thumb").replaceWith(img);
+  }
+
+  e.querySelector(".barcode").appendChild(code128SVG(x.code));
+
+  const fav = e.querySelector(".fav");
+  fav.textContent = isFav(x.code) ? "★" : "☆";
+  fav.className = "fav " + (isFav(x.code) ? "fav-on" : "");
+  fav.onclick = () => toggleFav(x.code);
+
+  addBtn.onclick = () => addOrder(x, qtyInput.value);
+
+  e.querySelector(".copy").onclick = async () => {
+    try { await navigator.clipboard.writeText(x.code); } catch {}
+    touch(x.code);
+    e.querySelector(".copy").textContent = "Copied";
+    setTimeout(() => e.querySelector(".copy").textContent = "Copy", 900);
+    renderRecent();
+  };
+
+  const a = e.querySelector("a");
+  a.href = SAVE_ON_BASE + encodeURIComponent(x.code);
+  a.onclick = () => touch(x.code);
+
+  return e;
+}
 function placeholder(){const d=document.createElement("div");d.className="thumb placeholder";d.textContent="No image";return d}
 function code128SVG(v){v=String(v).trim();const numeric=/^\d+$/.test(v)&&v.length%2===0;let codes=[],sum;if(numeric){codes.push(105);sum=105;for(let i=0;i<v.length;i+=2){const c=Number(v.slice(i,i+2));codes.push(c);sum+=c*(codes.length-1)}}else{codes.push(104);sum=104;for(let i=0;i<v.length;i++){const c=v.charCodeAt(i)-32;codes.push(c);sum+=c*(codes.length-1)}}codes.push(sum%103,106);const mod=numeric&&v.length>6?2.05:2.3,h=58;let x=10,parts=[];for(const c of codes){const p=CODE128[c];if(!p)continue;for(let i=0;i<p.length;i++){const w=Number(p[i])*mod;if(i%2===0)parts.push(`<rect x="${x.toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${h}"/>`);x+=w}}x+=10;const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("viewBox",`0 0 ${Math.ceil(x)} ${h+18}`);svg.innerHTML=`<g fill="#000">${parts.join("")}</g><text x="${Math.ceil(x/2)}" y="${h+14}" text-anchor="middle" font-size="13" font-family="Arial" font-weight="700">${v}</text>`;return svg}
 function show(t){msg.hidden=false;msg.textContent=t}function hide(){msg.hidden=true;msg.textContent=""}function setSync(t,l=""){syncStatus.textContent=t;syncStatus.className="sync-status "+l}
