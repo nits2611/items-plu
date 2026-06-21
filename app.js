@@ -316,3 +316,174 @@ function initTopTools() {
 
 initTopTools();
 initAdvancedToggle();loadInitialData();
+
+
+/* Missing details form v7 fixed - additive overrides */
+(function(){
+  function safeGetJSON(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}}
+  function safeSetJSON(k,v){localStorage.setItem(k,JSON.stringify(v))}
+  function storeKey(n){try{return key(n)}catch(e){return "plu_default-store_"+n}}
+
+  window.openMissingForm = function(term, index = "") {
+    const modal = document.getElementById("missingModal");
+    if (!modal) return;
+
+    const list = (typeof missingItems === "function") ? missingItems() : safeGetJSON(storeKey("missing"), []);
+    const row = index !== "" ? list[Number(index)] : null;
+    const value = row?.term || String(term || "").trim();
+
+    document.getElementById("missingEditIndex").value = index;
+    document.getElementById("missingTerm").value = value;
+    document.getElementById("missingName").value = row?.item_name || "";
+    document.getElementById("missingBrand").value = row?.brand || "";
+    document.getElementById("missingQuantity").value = row?.quantity || "";
+    document.getElementById("missingUnit").value = row?.unit || "";
+    document.getElementById("missingCategory").value = row?.category || "";
+    document.getElementById("missingNotes").value = row?.notes || "";
+
+    const link = document.getElementById("missingSaveOnLink");
+    if (link) link.href = (typeof saveOnSearchUrl === "function") ? saveOnSearchUrl(value) : (SAVE_ON_BASE + encodeURIComponent(value));
+
+    modal.hidden = false;
+  };
+
+  window.closeMissingForm = function() {
+    const modal = document.getElementById("missingModal");
+    if (modal) modal.hidden = true;
+  };
+
+  window.saveMissing = function(term) {
+    term = String(term || "").trim();
+    if (!term) return;
+    openMissingForm(term);
+  };
+
+  window.saveMissingDetails = function(formData) {
+    let list = (typeof missingItems === "function") ? missingItems() : safeGetJSON(storeKey("missing"), []);
+    const editIndex = formData.editIndex;
+    const row = {
+      term: formData.term,
+      item_name: formData.item_name,
+      brand: formData.brand,
+      quantity: formData.quantity,
+      unit: formData.unit,
+      category: formData.category,
+      notes: formData.notes,
+      date: formData.date || new Date().toISOString()
+    };
+
+    if (editIndex !== "") {
+      list[Number(editIndex)] = { ...list[Number(editIndex)], ...row };
+    } else {
+      const existingIndex = list.findIndex(x => String(x.term).toLowerCase() === String(row.term).toLowerCase());
+      if (existingIndex >= 0) list[existingIndex] = { ...list[existingIndex], ...row };
+      else list.unshift(row);
+    }
+
+    safeSetJSON(storeKey("missing"), list.slice(0, 200));
+    if (typeof renderMissing === "function") renderMissing();
+    closeMissingForm();
+    if (typeof toast === "function") toast("Missing item saved");
+  };
+
+  const oldRenderMissing = window.renderMissing || (typeof renderMissing === "function" ? renderMissing : null);
+  window.renderMissing = function() {
+    const box = document.getElementById("missingResults");
+    if (!box) return;
+    box.innerHTML = "";
+    const list = (typeof missingItems === "function") ? missingItems() : safeGetJSON(storeKey("missing"), []);
+
+    if (!list.length) {
+      box.innerHTML = '<section class="message">No missing items saved yet.</section>';
+      return;
+    }
+
+    list.forEach((row, index) => {
+      const e = document.createElement("article");
+      e.className = "order-item missing-item";
+      const displayDate = row.date ? new Date(row.date).toLocaleString() : "";
+      const title = row.item_name || row.term;
+      const size = [row.quantity, row.unit].filter(Boolean).join(" ");
+      const meta = [
+        row.brand ? `Brand: ${row.brand}` : "",
+        size ? `Size: ${size}` : "",
+        row.category ? `Category: ${row.category}` : "",
+        row.term ? `Code/Search: ${row.term}` : ""
+      ].filter(Boolean).join(" • ");
+
+      e.innerHTML = `
+        <div class="order-row">
+          <div>
+            <h3></h3>
+            <div class="code"></div>
+            <div class="missing-date"></div>
+            <div class="missing-notes" hidden></div>
+          </div>
+        </div>
+        <div class="actions">
+          <a target="_blank" rel="noopener">Check Save-On</a>
+          <button type="button" class="edit-missing">Edit</button>
+          <button type="button" class="remove-missing">Remove</button>
+        </div>
+      `;
+
+      e.querySelector("h3").textContent = title;
+      e.querySelector(".code").textContent = meta || row.term;
+      e.querySelector(".missing-date").textContent = displayDate;
+      const notes = e.querySelector(".missing-notes");
+      if (row.notes) { notes.hidden = false; notes.textContent = row.notes; }
+      e.querySelector("a").href = (typeof saveOnSearchUrl === "function") ? saveOnSearchUrl(row.term) : (SAVE_ON_BASE + encodeURIComponent(row.term));
+      e.querySelector(".edit-missing").onclick = () => openMissingForm(row.term, index);
+      e.querySelector(".remove-missing").onclick = () => {
+        if (typeof removeMissing === "function") removeMissing(row.term);
+        else {
+          safeSetJSON(storeKey("missing"), list.filter(x => x.term !== row.term));
+          renderMissing();
+        }
+      };
+      box.appendChild(e);
+    });
+  };
+
+  const closeBtn = document.getElementById("closeMissingModalBtn");
+  if (closeBtn) closeBtn.onclick = closeMissingForm;
+
+  const modal = document.getElementById("missingModal");
+  if (modal) {
+    modal.addEventListener("click", e => {
+      if (e.target === modal) closeMissingForm();
+    });
+  }
+
+  const form = document.getElementById("missingForm");
+  if (form) {
+    form.addEventListener("submit", e => {
+      e.preventDefault();
+      saveMissingDetails({
+        editIndex: document.getElementById("missingEditIndex").value,
+        term: document.getElementById("missingTerm").value.trim(),
+        item_name: document.getElementById("missingName").value.trim(),
+        brand: document.getElementById("missingBrand").value.trim(),
+        quantity: document.getElementById("missingQuantity").value.trim(),
+        unit: document.getElementById("missingUnit").value.trim(),
+        category: document.getElementById("missingCategory").value.trim(),
+        notes: document.getElementById("missingNotes").value.trim()
+      });
+    });
+  }
+
+  const exportBtn = document.getElementById("exportMissingBtn");
+  if (exportBtn) {
+    exportBtn.onclick = () => {
+      const list = (typeof missingItems === "function") ? missingItems() : safeGetJSON(storeKey("missing"), []);
+      const rows = [
+        "term,item_name,brand,quantity,unit,category,notes,date",
+        ...list.map(x => [
+          x.term || "", x.item_name || "", x.brand || "", x.quantity || "",
+          x.unit || "", x.category || "", x.notes || "", x.date || ""
+        ].map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
+      ];
+      if (typeof downloadCSV === "function") downloadCSV("missing-items.csv", rows.join("\n"));
+    };
+  }
+})();

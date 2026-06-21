@@ -47,4 +47,64 @@
 
 </main>
 <div id="scannerModal" class="scanner-modal" hidden><div class="scanner-card"><div class="scanner-head"><h2>Scan Barcode</h2><button id="closeScannerBtn" type="button">Close</button></div><video id="scannerVideo" playsinline></video><p id="scannerStatus">Point camera at barcode.</p></div></div>
+
+<div id="missingModal" class="missing-modal" hidden>
+  <div class="missing-card">
+    <div class="missing-head">
+      <h2>Missing Item Details</h2>
+      <button id="closeMissingModalBtn" type="button">Close</button>
+    </div>
+
+    <form id="missingForm" class="missing-form">
+      <input type="hidden" id="missingEditIndex">
+
+      <label>Search / Scanned Value
+        <input id="missingTerm" type="text" readonly>
+      </label>
+
+      <label>Item Name
+        <input id="missingName" type="text" placeholder="Example: Earthbound Baby Arugula">
+      </label>
+
+      <label>Brand
+        <input id="missingBrand" type="text" placeholder="Example: Earthbound Farm">
+      </label>
+
+      <div class="form-grid">
+        <label>Quantity
+          <input id="missingQuantity" type="text" placeholder="142">
+        </label>
+
+        <label>Unit
+          <select id="missingUnit">
+            <option value="">Select</option>
+            <option value="g">g</option>
+            <option value="kg">kg</option>
+            <option value="ml">ml</option>
+            <option value="L">L</option>
+            <option value="oz">oz</option>
+            <option value="lb">lb</option>
+            <option value="each">each</option>
+            <option value="pack">pack</option>
+            <option value="case">case</option>
+          </select>
+        </label>
+      </div>
+
+      <label>Category
+        <input id="missingCategory" type="text" placeholder="Packaged Greens / Herbs / Dips">
+      </label>
+
+      <label>Notes
+        <textarea id="missingNotes" rows="3" placeholder="Optional notes"></textarea>
+      </label>
+
+      <div class="missing-actions">
+        <button type="submit">Save Missing Item</button>
+        <a id="missingSaveOnLink" class="button-link" target="_blank" rel="noopener">Check Save-On</a>
+      </div>
+    </form>
+  </div>
+</div>
+
 <footer>Data source: <code>items.csv</code>. Replace CSV on GitHub to sync updates.</footer><script src="data.js"></script><script src="app.js"></script></body></html>
