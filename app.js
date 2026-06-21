@@ -63,14 +63,96 @@ function toast(text) {
   window.__toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
 }
 
+
+function missingItems() {
+  return getJSON(key("missing"), []);
+}
+
+function saveMissing(term) {
+  term = String(term || "").trim();
+  if (!term) return;
+  let list = missingItems();
+  const exists = list.some(x => String(x.term).toLowerCase() === term.toLowerCase());
+  if (!exists) {
+    list.unshift({ term, date: new Date().toISOString(), note: "" });
+    setJSON(key("missing"), list.slice(0, 200));
+  }
+  renderMissing();
+  toast(`Saved missing item: ${term}`);
+}
+
+function removeMissing(term) {
+  setJSON(key("missing"), missingItems().filter(x => x.term !== term));
+  renderMissing();
+}
+
+function saveOnSearchUrl(term) {
+  return SAVE_ON_BASE + encodeURIComponent(String(term || "").trim());
+}
+
 function isOrg(x){return /(^ORG\b|ORGANIC)/i.test(x.item_name)}function isPackaged(x){return x.code.length>6||/packaged|upc/i.test(x.type)}
 function getResults(){let a=items,terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);if(filter==="produce")a=a.filter(x=>!isPackaged(x));if(filter==="packaged")a=a.filter(isPackaged);if(filter==="organic")a=a.filter(isOrg);if(terms.length)a=a.filter(x=>terms.every(t=>x.hay.includes(t)||x.item_name.toLowerCase().includes(t)||x.code.toLowerCase().includes(t)));return a.slice(0,100)}
 function byCodes(codes){return codes.map(c=>items.find(x=>x.code===c)).filter(Boolean)}
-function renderAll(){renderLookup();renderFavorites();renderRecent();renderOrder()}
-function renderLookup(){const a=getResults();results.innerHTML="";count.textContent=q.value.trim()?`${a.length} found`:`${items.length} items`;if(!a.length){show(`No matching item found${q.value.trim()?` for "${q.value.trim()}"`:""}. Try name, brand, quantity, PLU, UPC, alias, or shorter keyword.`);return}hide();const f=document.createDocumentFragment();a.forEach(x=>f.appendChild(card(x)));results.appendChild(f)}
+function renderAll(){renderLookup();renderFavorites();renderRecent();renderOrder();renderMissing()}
+
+function renderNotFound(term) {
+  results.innerHTML = "";
+  const clean = String(term || "").trim();
+  hide();
+
+  const card = document.createElement("section");
+  card.className = "message not-found-panel";
+  card.innerHTML = `
+    <strong>No local match found.</strong>
+    <p>${clean ? `Search/scanned value: <b></b>` : "Enter a keyword, PLU, or UPC to search."}</p>
+    <div class="not-found-actions">
+      <a class="button-link" target="_blank" rel="noopener">Check on Save-On</a>
+      <button type="button">Add to Missing Items</button>
+    </div>
+  `;
+
+  if (clean) card.querySelector("b").textContent = clean;
+  const link = card.querySelector("a");
+  link.href = saveOnSearchUrl(clean);
+  link.toggleAttribute("hidden", !clean);
+
+  const btn = card.querySelector("button");
+  btn.disabled = !clean;
+  btn.onclick = () => saveMissing(clean);
+
+  results.appendChild(card);
+  count.textContent = clean ? "0 found" : `${items.length} items`;
+}
+
+function renderLookup(){const a=getResults();results.innerHTML="";count.textContent=q.value.trim()?`${a.length} found`:`${items.length} items`;if(!a.length){renderNotFound(q.value.trim());return}hide();const f=document.createDocumentFragment();a.forEach(x=>f.appendChild(card(x)));results.appendChild(f)}
 function renderFavorites(){const box=document.getElementById("favoritesResults");box.innerHTML="";const a=byCodes(favs());if(!a.length){box.innerHTML='<section class="message">No favorites yet. Tap ☆ on an item.</section>';return}a.forEach(x=>box.appendChild(card(x)))}
 function renderRecent(){const box=document.getElementById("recentResults");box.innerHTML="";const a=byCodes(recents());if(!a.length){box.innerHTML='<section class="message">No recent items yet.</section>';return}a.forEach(x=>box.appendChild(card(x)))}
 function renderOrder(){const box=document.getElementById("orderResults");box.innerHTML="";const o=order();if(!o.length){box.innerHTML='<section class="message">No order items yet. Add items from Lookup.</section>';return}o.forEach(row=>{const item=items.find(x=>x.code===row.code)||row;const e=document.createElement("article");e.className="order-item";e.innerHTML=`<div class="order-row"><div><h3></h3><div class="code"></div></div><div class="qty"></div></div><div class="barcode"></div><div class="actions"><button type="button">Edit Qty</button><button type="button">Remove</button></div>`;e.querySelector("h3").textContent=item.item_name;e.querySelector(".code").textContent=row.code;e.querySelector(".qty").textContent=row.qty;e.querySelector(".barcode").appendChild(code128SVG(row.code));e.querySelectorAll("button")[0].onclick=()=>{const q=prompt("Quantity:",row.qty);if(q){let arr=order();arr=arr.map(x=>x.code===row.code?{...x,qty:q}:x);setJSON(key("order"),arr);renderOrder()}};e.querySelectorAll("button")[1].onclick=()=>{setJSON(key("order"),order().filter(x=>x.code!==row.code));renderOrder()};box.appendChild(e)})}
+
+function renderMissing() {
+  const box = document.getElementById("missingResults");
+  if (!box) return;
+  box.innerHTML = "";
+  const list = missingItems();
+
+  if (!list.length) {
+    box.innerHTML = '<section class="message">No missing items saved yet.</section>';
+    return;
+  }
+
+  list.forEach(row => {
+    const e = document.createElement("article");
+    e.className = "order-item";
+    const displayDate = row.date ? new Date(row.date).toLocaleString() : "";
+    e.innerHTML = `<div class="order-row"><div><h3></h3><div class="code"></div></div></div><div class="actions"><a target="_blank" rel="noopener">Check Save-On</a><button type="button">Remove</button></div>`;
+    e.querySelector("h3").textContent = row.term;
+    e.querySelector(".code").textContent = displayDate;
+    e.querySelector("a").href = saveOnSearchUrl(row.term);
+    e.querySelector("button").onclick = () => removeMissing(row.term);
+    box.appendChild(e);
+  });
+}
+
 function card(x) {
   const e = document.createElement("article");
   e.className = "card " + (isOrg(x) ? "org" : "");
@@ -173,14 +255,37 @@ function code128SVG(v){v=String(v).trim();const numeric=/^\d+$/.test(v)&&v.lengt
 function show(t){msg.hidden=false;msg.textContent=t}function hide(){msg.hidden=true;msg.textContent=""}function setSync(t,l=""){syncStatus.textContent=t;syncStatus.className="sync-status "+l}
 function switchView(v){document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.getElementById(v+"View").classList.add("active");renderAll()}
 q.addEventListener("input",renderLookup);document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>switchView(t.dataset.view));document.querySelectorAll(".filters button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".filters button").forEach(x=>x.classList.remove("active"));b.classList.add("active");filter=b.dataset.filter;renderLookup()});
-function initAdvancedToggle(){const btn=document.getElementById("advancedToggle"),controls=document.getElementById("advancedControls");if(!btn||!controls)return;function set(open){controls.hidden=!open;btn.setAttribute("aria-expanded",String(open));btn.textContent = open ? "✕" : "⚙️";localStorage.setItem("plu_advanced_open",open?"1":"0")}set(localStorage.getItem("plu_advanced_open")==="1");btn.onclick=e=>{e.preventDefault();set(controls.hidden)}}
+function initAdvancedToggle(){const btn=document.getElementById("advancedToggle"),controls=document.getElementById("advancedControls");if(!btn||!controls)return;function set(open){controls.hidden=!open;btn.setAttribute("aria-expanded",String(open));if (open) {
+    btn.textContent = "✕";
+  } else {
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5H21L14 13V19L10 21V13L3 5Z"/></svg>`;
+  }localStorage.setItem("plu_advanced_open",open?"1":"0")}set(localStorage.getItem("plu_advanced_open")==="1");btn.onclick=e=>{e.preventDefault();set(controls.hidden)}}
 document.getElementById("csvUpload")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const text=await f.text(),hash=await sha256Short(text);localStorage.setItem(STORAGE_CSV,text);localStorage.setItem(STORAGE_HASH,hash);setItemsFromCSV(text);setSync(`Uploaded CSV loaded (${items.length} items).`)});
 document.getElementById("resetBtn").onclick=()=>{localStorage.removeItem(STORAGE_CSV);localStorage.removeItem(STORAGE_HASH);items=rowsToItems(window.DEFAULT_ITEMS||[]);renderAll();checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear today's order?")){setJSON(key("order"),[]);renderOrder()}};
 document.getElementById("exportOrderBtn").onclick=()=>downloadCSV("today-order.csv",["item_name,code,quantity",...order().map(o=>`"${(o.item_name||"").replaceAll('"','""')}",${o.code},"${String(o.qty).replaceAll('"','""')}"`)].join("\n"));document.getElementById("exportProfileBtn").onclick=()=>{const data={favorites:favs(),recent:recents(),order:order(),exportedAt:new Date().toISOString()};downloadFile("plu-profile.json",JSON.stringify(data,null,2),"application/json")};document.getElementById("importProfile")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(data.favorites)setJSON(key("favorites"),data.favorites);if(data.recent)setJSON(key("recent"),data.recent);if(data.order)setJSON(key("order"),data.order);renderAll()});
 function downloadCSV(n,t){downloadFile(n,t,"text/csv")}function downloadFile(n,t,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type}));a.download=n;a.click();URL.revokeObjectURL(a.href)}
-async function startScanner(){if(!("BarcodeDetector" in window)){alert("Camera barcode scanner is not supported in this browser. Try Android Chrome. Bluetooth scanner can still type into search.");return}const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),status=document.getElementById("scannerStatus");modal.hidden=false;status.textContent="Opening camera...";try{scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});video.srcObject=scannerStream;await video.play();const detector=new BarcodeDetector({formats:["code_128","ean_13","upc_a","upc_e","ean_8"]});status.textContent="Point camera at barcode.";scannerTimer=setInterval(async()=>{try{const codes=await detector.detect(video);if(codes.length){const val=codes[0].rawValue;stopScanner();q.value=val;touch(val);switchView("lookup");renderLookup();if(!getResults().length)show(`Scanned ${val}, but item was not found. Add it to CSV later or search Save-On.`)}}catch{}},500)}catch(e){status.textContent="Camera unavailable. Check permission/HTTPS."}}
+async function startScanner(){if(!("BarcodeDetector" in window)){alert("Camera barcode scanner is not supported in this browser. Try Android Chrome. Bluetooth scanner can still type into search.");return}const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),status=document.getElementById("scannerStatus");modal.hidden=false;status.textContent="Opening camera...";try{scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});video.srcObject=scannerStream;await video.play();const detector=new BarcodeDetector({formats:["code_128","ean_13","upc_a","upc_e","ean_8"]});status.textContent="Point camera at barcode.";scannerTimer=setInterval(async()=>{try{const codes=await detector.detect(video);if(codes.length){const val=codes[0].rawValue;stopScanner();q.value=val;touch(val);switchView("lookup");renderLookup();if(!getResults().length){renderNotFound(val)}}}catch{}},500)}catch(e){status.textContent="Camera unavailable. Check permission/HTTPS."}}
 function stopScanner(){const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo");modal.hidden=true;if(scannerTimer)clearInterval(scannerTimer);scannerTimer=null;if(scannerStream)scannerStream.getTracks().forEach(t=>t.stop());scannerStream=null;video.srcObject=null}
-document.getElementById("scanBtn").onclick=startScanner;document.getElementById("closeScannerBtn").onclick=stopScanner;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;document.getElementById("installBtn").hidden=false});document.getElementById("installBtn").onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById("installBtn").hidden=true}};if("serviceWorker" in navigator)navigator.serviceWorker.register("service-worker.js").then(r=>r.update?.()).catch(()=>{});
+document.getElementById("scanBtn").onclick=startScanner;document.getElementById("closeScannerBtn").onclick=stopScanner;
+const exportMissingBtn = document.getElementById("exportMissingBtn");
+if (exportMissingBtn) {
+  exportMissingBtn.onclick = () => {
+    const rows = ["term,date,note", ...missingItems().map(x => `"${String(x.term).replaceAll('"','""')}","${String(x.date||"").replaceAll('"','""')}","${String(x.note||"").replaceAll('"','""')}"`)];
+    downloadCSV("missing-items.csv", rows.join("\n"));
+  };
+}
+
+const clearMissingBtn = document.getElementById("clearMissingBtn");
+if (clearMissingBtn) {
+  clearMissingBtn.onclick = () => {
+    if (confirm("Clear missing items?")) {
+      setJSON(key("missing"), []);
+      renderMissing();
+    }
+  };
+}
+
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;document.getElementById("installBtn").hidden=false});document.getElementById("installBtn").onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById("installBtn").hidden=true}};if("serviceWorker" in navigator)navigator.serviceWorker.register("service-worker.js").then(r=>r.update?.()).catch(()=>{});
 function initMobileBottomUI() {
   const isMobile = window.matchMedia("(max-width: 640px)").matches;
   document.body.classList.toggle("mobile-bottom-ui", isMobile);
@@ -198,7 +303,11 @@ function initTopTools() {
   function setOpen(open) {
     panel.hidden = !open;
     btn.setAttribute("aria-expanded", String(open));
-    btn.textContent = open ? "✕" : "⚙️";
+    if (open) {
+    btn.textContent = "✕";
+  } else {
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5H21L14 13V19L10 21V13L3 5Z"/></svg>`;
+  }
   }
 
   btn.addEventListener("click", () => setOpen(panel.hidden));

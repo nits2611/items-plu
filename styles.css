@@ -236,3 +236,45 @@
     grid-column:1 / -1;
   }
 }
+
+
+/* Missing items / Save-On fallback */
+.tabs{
+  grid-template-columns:repeat(5,1fr);
+}
+.not-found-panel p{
+  margin:8px 0 10px;
+}
+.not-found-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.button-link{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:#087763;
+  color:white;
+  text-decoration:none;
+  border-radius:10px;
+  padding:9px 12px;
+  font-weight:800;
+}
+.not-found-actions button{
+  width:auto;
+}
+.filter-btn svg{
+  display:block;
+  margin:auto;
+}
+@media(max-width:540px){
+  .tab{
+    font-size:.74rem;
+    padding:9px 2px;
+  }
+  .not-found-actions{
+    display:grid;
+    grid-template-columns:1fr;
+  }
+}
