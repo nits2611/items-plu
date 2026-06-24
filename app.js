@@ -339,6 +339,12 @@ initAdvancedToggle();loadInitialData();
     document.getElementById("missingQuantity").value = row?.quantity || "";
     document.getElementById("missingUnit").value = row?.unit || "";
     document.getElementById("missingCategory").value = row?.category || "";
+    {
+      const organicValue = row?.organic || "Conventional";
+      document.querySelectorAll('input[name="missingOrganic"]').forEach(r => {
+        r.checked = r.value === organicValue;
+      });
+    }
     document.getElementById("missingNotes").value = row?.notes || "";
 
     const link = document.getElementById("missingSaveOnLink");
@@ -368,6 +374,7 @@ initAdvancedToggle();loadInitialData();
       quantity: formData.quantity,
       unit: formData.unit,
       category: formData.category,
+      organic: formData.organic,
       notes: formData.notes,
       date: formData.date || new Date().toISOString()
     };
@@ -408,6 +415,7 @@ initAdvancedToggle();loadInitialData();
         row.brand ? `Brand: ${row.brand}` : "",
         size ? `Size: ${size}` : "",
         row.category ? `Category: ${row.category}` : "",
+        row.organic ? `Type: ${row.organic}` : "",
         row.term ? `Code/Search: ${row.term}` : ""
       ].filter(Boolean).join(" • ");
 
@@ -467,6 +475,7 @@ initAdvancedToggle();loadInitialData();
         quantity: document.getElementById("missingQuantity").value.trim(),
         unit: document.getElementById("missingUnit").value.trim(),
         category: document.getElementById("missingCategory").value.trim(),
+        organic: (document.querySelector('input[name="missingOrganic"]:checked')?.value || "Conventional").trim(),
         notes: document.getElementById("missingNotes").value.trim()
       });
     });
@@ -477,10 +486,10 @@ initAdvancedToggle();loadInitialData();
     exportBtn.onclick = () => {
       const list = (typeof missingItems === "function") ? missingItems() : safeGetJSON(storeKey("missing"), []);
       const rows = [
-        "term,item_name,brand,quantity,unit,category,notes,date",
+        "term,item_name,brand,quantity,unit,category,organic,notes,date",
         ...list.map(x => [
           x.term || "", x.item_name || "", x.brand || "", x.quantity || "",
-          x.unit || "", x.category || "", x.notes || "", x.date || ""
+          x.unit || "", x.category || "", x.organic || "", x.notes || "", x.date || ""
         ].map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
       ];
       if (typeof downloadCSV === "function") downloadCSV("missing-items.csv", rows.join("\n"));

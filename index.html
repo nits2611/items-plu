@@ -1,4 +1,34 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#087763"><title>My Produce Assistant</title><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/icon-192.png"><link rel="stylesheet" href="styles.css"></head><body>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#087763"><title>My Produce Assistant</title><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/icon-192.png"><link rel="stylesheet" href="styles.css">
+<style id="organic-inline-style">
+.organic-inline{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+  font-size:.9rem;
+  font-weight:800;
+}
+.organic-label{
+  min-width:auto;
+}
+.radio-inline{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-weight:700;
+}
+.radio-inline input{
+  margin:0;
+}
+@media(max-width:540px){
+  .organic-inline{
+    gap:10px;
+    font-size:.88rem;
+  }
+}
+</style>
+
+</head><body>
 <header><div><h1>My Produce Assistant</h1><p>Lookup, scan, favorite, recent items, and order list.</p></div><div class="header-actions">
     <button id="topToolsBtn" class="top-tools-btn" type="button" aria-expanded="false" title="Data tools">⚙️</button>
     <button id="installBtn" hidden>Install</button>
@@ -52,7 +82,7 @@
   <div class="missing-card">
     <div class="missing-head">
       <h2>Missing Item Details</h2>
-      <button id="closeMissingModalBtn" type="button">Close</button>
+      <button id="closeMissingModalBtn" type="button">X</button>
     </div>
 
     <form id="missingForm" class="missing-form">
@@ -94,6 +124,18 @@
       <label>Category
         <input id="missingCategory" type="text" placeholder="Packaged Greens / Herbs / Dips">
       </label>
+
+      <div class="organic-inline">
+        <span class="organic-label">Type:</span>
+        <label class="radio-inline">
+          <input type="radio" name="missingOrganic" value="Conventional" checked>
+        </label>
+        Conventional
+        <label class="radio-inline">
+          <input type="radio" name="missingOrganic" value="Organic">
+        </label>
+        Organic
+      </div>
 
       <label>Notes
         <textarea id="missingNotes" rows="3" placeholder="Optional notes"></textarea>
