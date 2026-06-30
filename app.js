@@ -275,6 +275,52 @@ if (exportMissingBtn) {
   };
 }
 
+
+const importMissingCsv = document.getElementById("importMissingCsv");
+if (importMissingCsv) {
+  importMissingCsv.addEventListener("change", async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const text = await file.text();
+    const rows = parseCSV(text);
+
+    if (!rows.length) {
+      toast("No rows found in Missing CSV");
+      return;
+    }
+
+    const existing = missingItems();
+    const merged = [...existing];
+
+    rows.forEach(row => {
+      const term = String(row.term || row.code || row.search || row.scanned_value || "").trim();
+      if (!term) return;
+
+      const imported = {
+        term,
+        item_name: row.item_name || row.name || "",
+        brand: row.brand || "",
+        quantity: row.quantity || "",
+        unit: row.unit || "",
+        category: row.category || "",
+        organic: row.organic || row.type_quality || row.organic_type || "",
+        notes: row.notes || row.note || "",
+        date: row.date || new Date().toISOString()
+      };
+
+      const idx = merged.findIndex(x => String(x.term).toLowerCase() === term.toLowerCase());
+      if (idx >= 0) merged[idx] = { ...merged[idx], ...imported };
+      else merged.unshift(imported);
+    });
+
+    setJSON(key("missing"), merged.slice(0, 300));
+    renderMissing();
+    toast(`Imported Missing CSV (${rows.length} rows)`);
+    e.target.value = "";
+  });
+}
+
 const clearMissingBtn = document.getElementById("clearMissingBtn");
 if (clearMissingBtn) {
   clearMissingBtn.onclick = () => {
@@ -495,4 +541,526 @@ initAdvancedToggle();loadInitialData();
       if (typeof downloadCSV === "function") downloadCSV("missing-items.csv", rows.join("\n"));
     };
   }
+})();
+
+
+/* v12: promote missing items to local catalog + archive */
+(function(){
+  function csvEscape(v){ return `"${String(v ?? "").replaceAll('"','""')}"`; }
+
+  function itemRowsToCSV(rows){
+    const headers = ["item_name","code","quantity","brand","category","type","image_local","image_url","notes","aliases","search_keywords","organic"];
+    const lines = [headers.join(",")];
+    rows.forEach(r => {
+      const obj = normalize ? r : r;
+      const line = headers.map(h => csvEscape(obj[h] || "")).join(",");
+      lines.push(line);
+    });
+    return lines.join("\n");
+  }
+
+  function currentItemsCSV(){
+    const rows = (items || []).map(x => {
+      const search = [x.item_name,x.code,x.quantity,x.brand,x.category,x.type,x.notes,x.aliases,x.organic].filter(Boolean).join(" ").toUpperCase();
+      return {
+        item_name:x.item_name || "",
+        code:x.code || "",
+        quantity:x.quantity || "",
+        brand:x.brand || "",
+        category:x.category || "",
+        type:x.type || ((String(x.code).length > 6) ? "packaged" : "produce"),
+        image_local:x.image_local || "",
+        image_url:x.image_url || "",
+        notes:x.notes || "",
+        aliases:x.aliases || "",
+        search_keywords:x.hay ? x.hay.toUpperCase() : search,
+        organic:x.organic || (isOrg && isOrg(x) ? "Organic" : "Conventional")
+      };
+    });
+    return itemRowsToCSV(rows);
+  }
+
+  function getSelectedMissingTerms(){
+    return Array.from(document.querySelectorAll(".missing-select:checked")).map(x => x.value);
+  }
+
+  function missingToItem(row){
+    const itemName = (row.item_name || row.term || "").trim();
+    const code = String(row.term || "").trim();
+    const quantity = row.quantity || "";
+    const unit = row.unit || "";
+    const quantityText = [quantity, unit].filter(Boolean).join(" ");
+    const brand = row.brand || "";
+    const category = row.category || "Uncategorized";
+    const organic = row.organic || "Conventional";
+    const aliases = [
+      itemName,
+      brand && itemName ? `${brand} ${itemName}` : "",
+      quantityText ? `${itemName} ${quantityText}` : "",
+      row.notes || ""
+    ].filter(Boolean).join("; ");
+
+    return {
+      item_name: itemName,
+      code,
+      quantity: quantityText,
+      brand,
+      category,
+      type: String(code).length > 6 ? "packaged" : "produce",
+      image_local: "",
+      image_url: "",
+      notes: row.notes || "",
+      aliases,
+      search_keywords: [itemName, code, quantityText, brand, category, organic, aliases].filter(Boolean).join(" ").toUpperCase(),
+      organic
+    };
+  }
+
+  window.addMissingToCatalog = async function(terms){
+    const allMissing = missingItems();
+    const selected = allMissing.filter(x => terms.includes(String(x.term)));
+    if (!selected.length) {
+      toast("Select missing items first");
+      return;
+    }
+
+    const existingCodes = new Set((items || []).map(x => String(x.code).trim().toLowerCase()));
+    const newRows = selected.map(missingToItem).filter(x => x.item_name && x.code && !existingCodes.has(String(x.code).trim().toLowerCase()));
+
+    if (!newRows.length) {
+      toast("Selected items already exist or need details");
+      return;
+    }
+
+    const existingCSV = currentItemsCSV();
+    const newCSVLines = newRows.map(r => {
+      const headers = ["item_name","code","quantity","brand","category","type","image_local","image_url","notes","aliases","search_keywords","organic"];
+      return headers.map(h => csvEscape(r[h] || "")).join(",");
+    });
+    const updatedCSV = existingCSV + "\n" + newCSVLines.join("\n");
+
+    const hash = (typeof sha256Short === "function") ? await sha256Short(updatedCSV) : String(Date.now());
+    localStorage.setItem(STORAGE_CSV, updatedCSV);
+    localStorage.setItem(STORAGE_HASH, hash);
+    setItemsFromCSV(updatedCSV);
+
+    // remove promoted items from missing list
+    setJSON(key("missing"), allMissing.filter(x => !terms.includes(String(x.term))));
+    renderMissing();
+    toast(`Added ${newRows.length} item(s) to catalog`);
+  };
+
+  window.archiveMissingItems = function(terms){
+    if (!terms.length) {
+      toast("Select missing items first");
+      return;
+    }
+    const archived = getJSON(key("missing_archived"), []);
+    const allMissing = missingItems();
+    const selected = allMissing.filter(x => terms.includes(String(x.term)));
+    setJSON(key("missing_archived"), [...selected, ...archived].slice(0,500));
+    setJSON(key("missing"), allMissing.filter(x => !terms.includes(String(x.term))));
+    renderMissing();
+    toast(`Archived ${selected.length} missing item(s)`);
+  };
+
+  // Override renderMissing to include selection checkboxes
+  window.renderMissing = function(){
+    const box = document.getElementById("missingResults");
+    if (!box) return;
+    box.innerHTML = "";
+    const list = missingItems();
+
+    if (!list.length) {
+      box.innerHTML = '<section class="message">No missing items saved yet.</section>';
+      return;
+    }
+
+    list.forEach((row, index) => {
+      const e = document.createElement("article");
+      e.className = "order-item missing-item";
+      const displayDate = row.date ? new Date(row.date).toLocaleString() : "";
+      const title = row.item_name || row.term;
+      const size = [row.quantity, row.unit].filter(Boolean).join(" ");
+      const meta = [
+        row.brand ? `Brand: ${row.brand}` : "",
+        size ? `Size: ${size}` : "",
+        row.category ? `Category: ${row.category}` : "",
+        row.organic ? `Type: ${row.organic}` : "",
+        row.term ? `Code/Search: ${row.term}` : ""
+      ].filter(Boolean).join(" • ");
+
+      e.innerHTML = `
+        <div class="missing-row-head">
+          <label class="missing-check"><input class="missing-select" type="checkbox" value=""> Select</label>
+        </div>
+        <div class="order-row">
+          <div>
+            <h3></h3>
+            <div class="code"></div>
+            <div class="missing-date"></div>
+            <div class="missing-notes" hidden></div>
+          </div>
+        </div>
+        <div class="actions">
+          <a target="_blank" rel="noopener">Check Save-On</a>
+          <button type="button" class="edit-missing">Edit</button>
+          <button type="button" class="remove-missing">Remove</button>
+        </div>
+      `;
+
+      const check = e.querySelector(".missing-select");
+      check.value = row.term || "";
+      e.querySelector("h3").textContent = title;
+      e.querySelector(".code").textContent = meta || row.term;
+      e.querySelector(".missing-date").textContent = displayDate;
+      const notes = e.querySelector(".missing-notes");
+      if (row.notes) { notes.hidden = false; notes.textContent = row.notes; }
+      e.querySelector("a").href = (typeof saveOnSearchUrl === "function") ? saveOnSearchUrl(row.term) : (SAVE_ON_BASE + encodeURIComponent(row.term));
+      e.querySelector(".edit-missing").onclick = () => openMissingForm(row.term, index);
+      e.querySelector(".remove-missing").onclick = () => removeMissing(row.term);
+      box.appendChild(e);
+    });
+  };
+
+  const addBtn = document.getElementById("addMissingToCatalogBtn");
+  if (addBtn) addBtn.onclick = () => addMissingToCatalog(getSelectedMissingTerms());
+
+  const archiveBtn = document.getElementById("archiveMissingBtn");
+  if (archiveBtn) archiveBtn.onclick = () => archiveMissingItems(getSelectedMissingTerms());
+
+  const exportItemsBtn = document.getElementById("exportItemsBtn");
+  if (exportItemsBtn) exportItemsBtn.onclick = () => downloadCSV("items.csv", currentItemsCSV());
+
+  // re-render after override
+  if (typeof renderMissing === "function") renderMissing();
+})();
+
+
+/* v13 archive seasonal */
+(function(){
+function truthy(v){return ["yes","true","1","y","archived","seasonal"].includes(String(v||"").trim().toLowerCase())}
+function csvEscape(v){return `"${String(v??"").replaceAll('"','""')}"`}
+function archivedCodes(){return getJSON(key("catalog_archived_codes"),[])}
+function setArchivedCodes(v){setJSON(key("catalog_archived_codes"),Array.from(new Set(v.map(String))))}
+function isArchivedItem(x){return truthy(x?.is_archived)||archivedCodes().includes(String(x?.code||""))}
+function isSeasonalItem(x){return truthy(x?.is_seasonal)||!!String(x?.season||"").trim()||!!String(x?.festival||"").trim()}
+
+const oldNormalize=normalize;
+window.normalize=function(row){const x=oldNormalize(row);x.organic=row.organic||x.organic||(/(^ORG\b|ORGANIC)/i.test(x.item_name)?"Organic":"Conventional");x.is_archived=row.is_archived||row.archived||"";x.is_seasonal=row.is_seasonal||row.seasonal||"";x.season=row.season||"";x.festival=row.festival||"";return x};
+
+window.getResults=function(){let a=(items||[]).filter(x=>!isArchivedItem(x));const terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);if(filter==="produce")a=a.filter(x=>!isPackaged(x));if(filter==="packaged")a=a.filter(isPackaged);if(filter==="organic")a=a.filter(isOrg);if(filter==="seasonal")a=a.filter(isSeasonalItem);if(terms.length)a=a.filter(x=>terms.every(t=>x.hay.includes(t)||x.item_name.toLowerCase().includes(t)||x.code.toLowerCase().includes(t)||String(x.season||"").toLowerCase().includes(t)||String(x.festival||"").toLowerCase().includes(t)));return a.slice(0,100)};
+
+window.archiveCatalogItem=function(code){const a=archivedCodes();if(!a.includes(String(code)))a.unshift(String(code));setArchivedCodes(a);renderAll();toast("Item archived")};
+window.restoreCatalogItem=function(code){setArchivedCodes(archivedCodes().filter(x=>x!==String(code)));renderAll();toast("Item restored")};
+
+const oldCard=card;
+window.card=function(x){const e=oldCard(x);const badges=e.querySelector(".badges");if(badges&&isSeasonalItem(x)){const s=document.createElement("span");s.className="badge seasonal";s.textContent=[x.season,x.festival].filter(Boolean).join(" / ")||"Seasonal";badges.appendChild(s)}const actions=e.querySelector(".actions");if(actions&&!actions.querySelector(".archive-catalog")){const b=document.createElement("button");b.type="button";b.className="archive-catalog";b.textContent="Archive";b.onclick=()=>archiveCatalogItem(x.code);actions.appendChild(b);actions.style.gridTemplateColumns="repeat(4,1fr)"}return e};
+
+window.renderArchive=function(){const box=document.getElementById("archiveResults");if(!box)return;box.innerHTML="";const arr=(items||[]).filter(isArchivedItem);if(!arr.length){box.innerHTML='<section class="message">No archived catalog items yet.</section>';return}arr.forEach(x=>{const e=document.createElement("article");e.className="card archive-card";e.innerHTML='<div class="top"><div class="thumb placeholder">Archived</div><div><h2 class="name"></h2><div class="badges"></div><div class="code"></div></div></div><div class="actions"><button type="button" class="restore-catalog">Restore</button><a target="_blank" rel="noopener">Check Save-On</a></div>';e.querySelector(".name").textContent=x.item_name;e.querySelector(".code").textContent=x.code;const bd=e.querySelector(".badges");[x.brand,x.quantity,x.category,x.organic,x.season,x.festival].filter(Boolean).forEach(v=>{const s=document.createElement("span");s.className="badge";s.textContent=v;bd.appendChild(s)});e.querySelector(".restore-catalog").onclick=()=>restoreCatalogItem(x.code);e.querySelector("a").href=SAVE_ON_BASE+encodeURIComponent(x.code);box.appendChild(e)})};
+
+const oldRenderAll=renderAll;window.renderAll=function(){oldRenderAll();renderArchive()};
+
+window.currentItemsCSV=function(){const headers=["item_name","code","quantity","brand","category","type","image_local","image_url","notes","aliases","search_keywords","organic","is_archived","is_seasonal","season","festival"];const lines=[headers.join(",")];(items||[]).forEach(x=>{const search=[x.item_name,x.code,x.quantity,x.brand,x.category,x.type,x.notes,x.aliases,x.organic,x.season,x.festival].filter(Boolean).join(" ").toUpperCase();const row={item_name:x.item_name||"",code:x.code||"",quantity:x.quantity||"",brand:x.brand||"",category:x.category||"",type:x.type||((String(x.code).length>6)?"packaged":"produce"),image_local:x.image_local||"",image_url:x.image_url||"",notes:x.notes||"",aliases:x.aliases||"",search_keywords:x.hay?x.hay.toUpperCase():search,organic:x.organic||(isOrg(x)?"Organic":"Conventional"),is_archived:isArchivedItem(x)?"Yes":"",is_seasonal:isSeasonalItem(x)?"Yes":"",season:x.season||"",festival:x.festival||""};lines.push(headers.map(h=>csvEscape(row[h]||"")).join(","))});return lines.join("\n")};
+
+const exportItemsBtn=document.getElementById("exportItemsBtn");if(exportItemsBtn)exportItemsBtn.onclick=()=>downloadCSV("items.csv",currentItemsCSV());
+const exportArchiveBtn=document.getElementById("exportArchiveBtn");if(exportArchiveBtn)exportArchiveBtn.onclick=()=>{const h=["item_name","code","quantity","brand","category","organic","season","festival"];const lines=[h.join(","),...(items||[]).filter(isArchivedItem).map(x=>h.map(k=>csvEscape(x[k]||"")).join(","))];downloadCSV("archived-items.csv",lines.join("\n"))};
+
+const oldOpenMissingForm=window.openMissingForm;if(oldOpenMissingForm)window.openMissingForm=function(term,index=""){oldOpenMissingForm(term,index);const row=index!==""?missingItems()[Number(index)]:null;const s=document.getElementById("missingSeasonal");if(s)s.checked=truthy(row?.is_seasonal);const season=document.getElementById("missingSeason");if(season)season.value=row?.season||"";const festival=document.getElementById("missingFestival");if(festival)festival.value=row?.festival||""};
+const oldSaveMissingDetails=window.saveMissingDetails;if(oldSaveMissingDetails)window.saveMissingDetails=function(fd){fd.is_seasonal=document.getElementById("missingSeasonal")?.checked?"Yes":"";fd.season=document.getElementById("missingSeason")?.value.trim()||"";fd.festival=document.getElementById("missingFestival")?.value.trim()||"";oldSaveMissingDetails(fd)};
+renderAll();
+})();
+
+
+/* v14: delete archived catalog item + image fields */
+(function(){
+  function csvEscape(v){ return `"${String(v ?? "").replaceAll('"','""')}"`; }
+
+  function saveCurrentItemsToLocalStorage(rows){
+    const headers = ["item_name","code","quantity","brand","category","type","image_local","image_url","notes","aliases","search_keywords","organic","is_archived","is_seasonal","season","festival"];
+    const lines = [headers.join(",")];
+
+    rows.forEach(x => {
+      const search = [x.item_name,x.code,x.quantity,x.brand,x.category,x.type,x.notes,x.aliases,x.organic,x.season,x.festival].filter(Boolean).join(" ").toUpperCase();
+      const row = {
+        item_name:x.item_name||"",
+        code:x.code||"",
+        quantity:x.quantity||"",
+        brand:x.brand||"",
+        category:x.category||"",
+        type:x.type||((String(x.code).length>6)?"packaged":"produce"),
+        image_local:x.image_local||"",
+        image_url:x.image_url||"",
+        notes:x.notes||"",
+        aliases:x.aliases||"",
+        search_keywords:x.hay?x.hay.toUpperCase():search,
+        organic:x.organic||(isOrg(x)?"Organic":"Conventional"),
+        is_archived:(getJSON(key("catalog_archived_codes"),[]).includes(String(x.code)) || String(x.is_archived||"").toLowerCase()==="yes")?"Yes":"",
+        is_seasonal:(String(x.is_seasonal||"").toLowerCase()==="yes" || x.season || x.festival)?"Yes":"",
+        season:x.season||"",
+        festival:x.festival||""
+      };
+      lines.push(headers.map(h=>csvEscape(row[h]||"")).join(","));
+    });
+
+    const csv = lines.join("\n");
+    localStorage.setItem(STORAGE_CSV, csv);
+    if (typeof sha256Short === "function") {
+      sha256Short(csv).then(hash => localStorage.setItem(STORAGE_HASH, hash));
+    } else {
+      localStorage.setItem(STORAGE_HASH, String(Date.now()));
+    }
+    setItemsFromCSV(csv);
+  }
+
+  window.deleteCatalogItemPermanently = function(code){
+    if(!confirm("Delete this item permanently from local catalog? Export Items CSV after this if you want to update GitHub.")) return;
+    const codeStr = String(code);
+    const remaining = (items || []).filter(x => String(x.code) !== codeStr);
+    const archived = getJSON(key("catalog_archived_codes"),[]).filter(x => String(x) !== codeStr);
+    setJSON(key("catalog_archived_codes"), archived);
+    saveCurrentItemsToLocalStorage(remaining);
+    if (typeof renderArchive === "function") renderArchive();
+    toast("Item deleted from local catalog");
+  };
+
+  // Override archive renderer to include Delete button and image preview where available.
+  window.renderArchive = function(){
+    const box = document.getElementById("archiveResults");
+    if(!box) return;
+    box.innerHTML = "";
+
+    const archivedCodes = getJSON(key("catalog_archived_codes"),[]);
+    const archived = (items || []).filter(x => archivedCodes.includes(String(x.code)) || String(x.is_archived||"").toLowerCase()==="yes");
+
+    if(!archived.length){
+      box.innerHTML = '<section class="message">No archived catalog items yet.</section>';
+      return;
+    }
+
+    archived.forEach(x => {
+      const e = document.createElement("article");
+      e.className = "card archive-card";
+      e.innerHTML = `
+        <div class="top">
+          <div class="thumb placeholder">Archived</div>
+          <div>
+            <h2 class="name"></h2>
+            <div class="badges"></div>
+            <div class="code"></div>
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" class="restore-catalog">Restore</button>
+          <button type="button" class="delete-catalog danger">Delete</button>
+          <a target="_blank" rel="noopener">Save-On</a>
+        </div>
+      `;
+
+      const src = x.image_local || x.image_url;
+      if (src) {
+        const img = document.createElement("img");
+        img.className = "thumb";
+        img.alt = x.item_name;
+        img.src = src;
+        img.onerror = () => {};
+        e.querySelector(".thumb").replaceWith(img);
+      }
+
+      e.querySelector(".name").textContent = x.item_name;
+      e.querySelector(".code").textContent = x.code;
+      const bd=e.querySelector(".badges");
+      [x.brand,x.quantity,x.category,x.organic,x.season,x.festival].filter(Boolean).forEach(v=>{
+        const s=document.createElement("span"); s.className="badge"; s.textContent=v; bd.appendChild(s);
+      });
+      e.querySelector(".restore-catalog").onclick = () => restoreCatalogItem(x.code);
+      e.querySelector(".delete-catalog").onclick = () => deleteCatalogItemPermanently(x.code);
+      e.querySelector("a").href = SAVE_ON_BASE + encodeURIComponent(x.code);
+      box.appendChild(e);
+    });
+  };
+
+  // Add image fields to missing form open/save behavior.
+  const oldOpenMissingFormV14 = window.openMissingForm;
+  if(oldOpenMissingFormV14){
+    window.openMissingForm = function(term,index=""){
+      oldOpenMissingFormV14(term,index);
+      const row = index !== "" ? missingItems()[Number(index)] : null;
+      const imgUrl = document.getElementById("missingImageUrl");
+      if(imgUrl) imgUrl.value = row?.image_url || "";
+      const imgLocal = document.getElementById("missingImageLocal");
+      if(imgLocal) imgLocal.value = row?.image_local || "";
+    };
+  }
+
+  const oldSaveMissingDetailsV14 = window.saveMissingDetails;
+  if(oldSaveMissingDetailsV14){
+    window.saveMissingDetails = function(formData){
+      formData.image_url = document.getElementById("missingImageUrl")?.value.trim() || "";
+      formData.image_local = document.getElementById("missingImageLocal")?.value.trim() || "";
+      oldSaveMissingDetailsV14(formData);
+    };
+  }
+
+  // Improve missingToItem if available through Add Selected to Catalog wrapper:
+  // After adding to catalog, rebuild catalog rows with image fields when possible.
+  const oldAddMissingToCatalogV14 = window.addMissingToCatalog;
+  if(oldAddMissingToCatalogV14){
+    window.addMissingToCatalog = async function(terms){
+      const selectedBefore = missingItems().filter(x => terms.includes(String(x.term)));
+      await oldAddMissingToCatalogV14(terms);
+
+      // Current catalog promotion already keeps search working.
+      // Image fields are preserved in missing export; for permanent catalog images, export Items CSV after promotion.
+    };
+  }
+
+  // Export Missing CSV should include image columns if export button is present.
+  const exportMissingBtn = document.getElementById("exportMissingBtn");
+  if(exportMissingBtn){
+    exportMissingBtn.onclick = () => {
+      const rows = [
+        "term,item_name,brand,quantity,unit,category,organic,is_seasonal,season,festival,image_url,image_local,notes,date",
+        ...missingItems().map(x => [
+          x.term||"", x.item_name||"", x.brand||"", x.quantity||"", x.unit||"", x.category||"",
+          x.organic||"", x.is_seasonal||"", x.season||"", x.festival||"",
+          x.image_url||"", x.image_local||"", x.notes||"", x.date||""
+        ].map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
+      ];
+      downloadCSV("missing-items.csv", rows.join("\n"));
+    };
+  }
+
+  if(typeof renderArchive === "function") renderArchive();
+})();
+
+
+/* v16 tools modal behavior */
+(function(){
+  const panel = document.getElementById("topToolsPanel");
+  const backdrop = panel?.querySelector(".top-tools-backdrop");
+  const btn = document.getElementById("topToolsBtn");
+  const close = document.getElementById("closeTopToolsBtn");
+
+  function setOpen(open){
+    if(!panel || !btn) return;
+    panel.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+    btn.textContent = open ? "✕" : "⚙️";
+    document.body.classList.toggle("tools-open", open);
+  }
+
+  if(btn){
+    btn.onclick = () => setOpen(panel.hidden);
+  }
+  if(close){
+    close.onclick = () => setOpen(false);
+  }
+  if(backdrop){
+    backdrop.onclick = () => setOpen(false);
+  }
+})();
+
+
+/* v17 mobile search drawer + draggable search button */
+(function(){
+  const fab = document.getElementById("mobileSearchFab");
+  const closeBtn = document.getElementById("closeSearchDrawerBtn");
+
+  function isMobile(){
+    return window.matchMedia("(max-width: 640px)").matches;
+  }
+
+  function setSearchOpen(open){
+    if(!isMobile()) {
+      document.body.classList.remove("search-drawer-closed");
+      return;
+    }
+    document.body.classList.toggle("search-drawer-closed", !open);
+    try{ localStorage.setItem("search_drawer_open", open ? "1" : "0"); }catch{}
+  }
+
+  function initSearchDrawerState(){
+    if(!isMobile()) {
+      document.body.classList.remove("search-drawer-closed");
+      return;
+    }
+    const saved = localStorage.getItem("search_drawer_open");
+    setSearchOpen(saved === null ? true : saved === "1");
+  }
+
+  if(fab){
+    fab.addEventListener("click", e => {
+      if(fab.dataset.dragging === "1") return;
+      setSearchOpen(true);
+      setTimeout(()=>document.getElementById("q")?.focus(), 80);
+    });
+
+    // Restore FAB position.
+    try{
+      const pos = JSON.parse(localStorage.getItem("search_fab_pos") || "null");
+      if(pos && typeof pos.left === "number" && typeof pos.top === "number"){
+        fab.style.left = pos.left + "px";
+        fab.style.top = pos.top + "px";
+        fab.style.right = "auto";
+        fab.style.bottom = "auto";
+      }
+    }catch{}
+
+    let dragging = false, moved = false, startX = 0, startY = 0, baseLeft = 0, baseTop = 0;
+
+    function pointerDown(e){
+      if(!isMobile()) return;
+      dragging = true;
+      moved = false;
+      fab.dataset.dragging = "0";
+      const p = e.touches ? e.touches[0] : e;
+      startX = p.clientX;
+      startY = p.clientY;
+      const rect = fab.getBoundingClientRect();
+      baseLeft = rect.left;
+      baseTop = rect.top;
+      fab.setPointerCapture?.(e.pointerId);
+    }
+
+    function pointerMove(e){
+      if(!dragging) return;
+      const p = e.touches ? e.touches[0] : e;
+      const dx = p.clientX - startX;
+      const dy = p.clientY - startY;
+      if(Math.abs(dx) + Math.abs(dy) > 8){
+        moved = true;
+        fab.dataset.dragging = "1";
+      }
+      if(!moved) return;
+      const size = fab.offsetWidth || 56;
+      const margin = 8;
+      const left = Math.max(margin, Math.min(window.innerWidth - size - margin, baseLeft + dx));
+      const top = Math.max(margin, Math.min(window.innerHeight - size - margin, baseTop + dy));
+      fab.style.left = left + "px";
+      fab.style.top = top + "px";
+      fab.style.right = "auto";
+      fab.style.bottom = "auto";
+      e.preventDefault?.();
+    }
+
+    function pointerUp(){
+      if(!dragging) return;
+      dragging = false;
+      const rect = fab.getBoundingClientRect();
+      try{ localStorage.setItem("search_fab_pos", JSON.stringify({left: rect.left, top: rect.top})); }catch{}
+      setTimeout(()=>{ fab.dataset.dragging = "0"; }, 80);
+    }
+
+    fab.addEventListener("pointerdown", pointerDown);
+    window.addEventListener("pointermove", pointerMove, {passive:false});
+    window.addEventListener("pointerup", pointerUp);
+  }
+
+  if(closeBtn){
+    closeBtn.addEventListener("click", () => setSearchOpen(false));
+  }
+
+  window.addEventListener("resize", initSearchDrawerState);
+  initSearchDrawerState();
 })();
