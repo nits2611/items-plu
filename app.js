@@ -1064,3 +1064,69 @@ renderAll();
   window.addEventListener("resize", initSearchDrawerState);
   initSearchDrawerState();
 })();
+
+
+/* v18: robust Data & Backup Tools modal fix */
+(function(){
+  function ready(fn){
+    if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
+    else fn();
+  }
+
+  ready(function(){
+    const btn = document.getElementById("topToolsBtn");
+    const panel = document.getElementById("topToolsPanel");
+    const close = document.getElementById("closeTopToolsBtn");
+    const backdrop = panel?.querySelector(".top-tools-backdrop");
+
+    if(!btn || !panel) return;
+
+    function openTools(){
+      panel.hidden = false;
+      panel.style.display = "flex";
+      btn.setAttribute("aria-expanded", "true");
+      btn.textContent = "✕";
+      document.body.classList.add("tools-open");
+    }
+
+    function closeTools(){
+      panel.hidden = true;
+      panel.style.display = "";
+      btn.setAttribute("aria-expanded", "false");
+      btn.textContent = "⚙️";
+      document.body.classList.remove("tools-open");
+    }
+
+    function toggleTools(event){
+      event.preventDefault();
+      event.stopPropagation();
+      if(panel.hidden || getComputedStyle(panel).display === "none") openTools();
+      else closeTools();
+    }
+
+    btn.onclick = null;
+    btn.addEventListener("click", toggleTools, true);
+
+    if(close){
+      close.onclick = null;
+      close.addEventListener("click", function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        closeTools();
+      }, true);
+    }
+
+    if(backdrop){
+      backdrop.onclick = null;
+      backdrop.addEventListener("click", function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        closeTools();
+      }, true);
+    }
+
+    document.addEventListener("keydown", function(e){
+      if(e.key === "Escape" && !panel.hidden) closeTools();
+    });
+  });
+})();

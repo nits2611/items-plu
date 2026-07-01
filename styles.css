@@ -509,6 +509,7 @@ body.tools-open{
 .top-tools-grid button{
   width:100%;
   justify-content:center;
+  border:1px solid darkseagreen;
 }
 @media(max-width:640px){
   .tab{
@@ -629,4 +630,24 @@ body.tools-open{
   body.mobile-bottom-ui .tabs{
     bottom:0;
   }
+}
+
+
+/* v18 tools modal click fix */
+.top-tools-btn{
+  position:relative;
+  z-index:200;
+  pointer-events:auto;
+}
+.top-tools-modal{
+  pointer-events:auto;
+}
+.top-tools-modal[hidden]{
+  display:none!important;
+}
+.top-tools-backdrop{
+  pointer-events:auto;
+}
+.top-tools-modal .top-tools-card{
+  pointer-events:auto;
 }
