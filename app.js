@@ -41,7 +41,7 @@ function addOrder(item, qty, silent = false) {
   renderOrder();
   renderFavorites();
   renderRecent();
-  if (!silent) toast(`${item.item_name} added to order: ${qty}`);
+  if (!silent) toast(`${item.item_name} added to back stock: ${qty}`);
 }
 
 function getOrderQty(code) {
@@ -127,7 +127,7 @@ function renderNotFound(term) {
 function renderLookup(){const a=getResults();results.innerHTML="";count.textContent=q.value.trim()?`${a.length} found`:`${items.length} items`;if(!a.length){renderNotFound(q.value.trim());return}hide();const f=document.createDocumentFragment();a.forEach(x=>f.appendChild(card(x)));results.appendChild(f)}
 function renderFavorites(){const box=document.getElementById("favoritesResults");box.innerHTML="";const a=byCodes(favs());if(!a.length){box.innerHTML='<section class="message">No favorites yet. Tap ☆ on an item.</section>';return}a.forEach(x=>box.appendChild(card(x)))}
 function renderRecent(){const box=document.getElementById("recentResults");box.innerHTML="";const a=byCodes(recents());if(!a.length){box.innerHTML='<section class="message">No recent items yet.</section>';return}a.forEach(x=>box.appendChild(card(x)))}
-function renderOrder(){const box=document.getElementById("orderResults");box.innerHTML="";const o=order();if(!o.length){box.innerHTML='<section class="message">No order items yet. Add items from Lookup.</section>';return}o.forEach(row=>{const item=items.find(x=>x.code===row.code)||row;const e=document.createElement("article");e.className="order-item";e.innerHTML=`<div class="order-row"><div><h3></h3><div class="code"></div></div><div class="qty"></div></div><div class="barcode"></div><div class="actions"><button type="button">Edit Qty</button><button type="button">Remove</button></div>`;e.querySelector("h3").textContent=item.item_name;e.querySelector(".code").textContent=row.code;e.querySelector(".qty").textContent=row.qty;e.querySelector(".barcode").appendChild(code128SVG(row.code));e.querySelectorAll("button")[0].onclick=()=>{const q=prompt("Quantity:",row.qty);if(q){let arr=order();arr=arr.map(x=>x.code===row.code?{...x,qty:q}:x);setJSON(key("order"),arr);renderOrder()}};e.querySelectorAll("button")[1].onclick=()=>{setJSON(key("order"),order().filter(x=>x.code!==row.code));renderOrder()};box.appendChild(e)})}
+function renderOrder(){const box=document.getElementById("orderResults");box.innerHTML="";const o=order();if(!o.length){box.innerHTML='<section class="message">No back stock items yet. Add items from Lookup.</section>';return}o.forEach(row=>{const item=items.find(x=>x.code===row.code)||row;const e=document.createElement("article");e.className="order-item";e.innerHTML=`<div class="order-row"><div><h3></h3><div class="code"></div></div><div class="qty"></div></div><div class="barcode"></div><div class="actions"><button type="button">Edit Qty</button><button type="button">Remove</button></div>`;e.querySelector("h3").textContent=item.item_name;e.querySelector(".code").textContent=row.code;e.querySelector(".qty").textContent=row.qty;e.querySelector(".barcode").appendChild(code128SVG(row.code));e.querySelectorAll("button")[0].onclick=()=>{const q=prompt("Quantity:",row.qty);if(q){let arr=order();arr=arr.map(x=>x.code===row.code?{...x,qty:q}:x);setJSON(key("order"),arr);renderOrder()}};e.querySelectorAll("button")[1].onclick=()=>{setJSON(key("order"),order().filter(x=>x.code!==row.code));renderOrder()};box.appendChild(e)})}
 
 function renderMissing() {
   const box = document.getElementById("missingResults");
@@ -261,8 +261,8 @@ function initAdvancedToggle(){const btn=document.getElementById("advancedToggle"
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5H21L14 13V19L10 21V13L3 5Z"/></svg>`;
   }localStorage.setItem("plu_advanced_open",open?"1":"0")}set(localStorage.getItem("plu_advanced_open")==="1");btn.onclick=e=>{e.preventDefault();set(controls.hidden)}}
 document.getElementById("csvUpload")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const text=await f.text(),hash=await sha256Short(text);localStorage.setItem(STORAGE_CSV,text);localStorage.setItem(STORAGE_HASH,hash);setItemsFromCSV(text);setSync(`Uploaded CSV loaded (${items.length} items).`)});
-document.getElementById("resetBtn").onclick=()=>{localStorage.removeItem(STORAGE_CSV);localStorage.removeItem(STORAGE_HASH);items=rowsToItems(window.DEFAULT_ITEMS||[]);renderAll();checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear today's order?")){setJSON(key("order"),[]);renderOrder()}};
-document.getElementById("exportOrderBtn").onclick=()=>downloadCSV("today-order.csv",["item_name,code,quantity",...order().map(o=>`"${(o.item_name||"").replaceAll('"','""')}",${o.code},"${String(o.qty).replaceAll('"','""')}"`)].join("\n"));document.getElementById("exportProfileBtn").onclick=()=>{const data={favorites:favs(),recent:recents(),order:order(),exportedAt:new Date().toISOString()};downloadFile("plu-profile.json",JSON.stringify(data,null,2),"application/json")};document.getElementById("importProfile")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(data.favorites)setJSON(key("favorites"),data.favorites);if(data.recent)setJSON(key("recent"),data.recent);if(data.order)setJSON(key("order"),data.order);renderAll()});
+document.getElementById("resetBtn").onclick=()=>{localStorage.removeItem(STORAGE_CSV);localStorage.removeItem(STORAGE_HASH);items=rowsToItems(window.DEFAULT_ITEMS||[]);renderAll();checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear back stock?")){setJSON(key("order"),[]);renderOrder()}};
+document.getElementById("exportOrderBtn").onclick=()=>downloadCSV("back-stock.csv",["item_name,code,quantity",...order().map(o=>`"${(o.item_name||"").replaceAll('"','""')}",${o.code},"${String(o.qty).replaceAll('"','""')}"`)].join("\n"));document.getElementById("exportProfileBtn").onclick=()=>{const data={favorites:favs(),recent:recents(),order:order(),exportedAt:new Date().toISOString()};downloadFile("plu-profile.json",JSON.stringify(data,null,2),"application/json")};document.getElementById("importProfile")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(data.favorites)setJSON(key("favorites"),data.favorites);if(data.recent)setJSON(key("recent"),data.recent);if(data.order)setJSON(key("order"),data.order);renderAll()});
 function downloadCSV(n,t){downloadFile(n,t,"text/csv")}function downloadFile(n,t,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type}));a.download=n;a.click();URL.revokeObjectURL(a.href)}
 async function startScanner(){if(!("BarcodeDetector" in window)){alert("Camera barcode scanner is not supported in this browser. Try Android Chrome. Bluetooth scanner can still type into search.");return}const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),status=document.getElementById("scannerStatus");modal.hidden=false;status.textContent="Opening camera...";try{scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});video.srcObject=scannerStream;await video.play();const detector=new BarcodeDetector({formats:["code_128","ean_13","upc_a","upc_e","ean_8"]});status.textContent="Point camera at barcode.";scannerTimer=setInterval(async()=>{try{const codes=await detector.detect(video);if(codes.length){const val=codes[0].rawValue;stopScanner();q.value=val;touch(val);switchView("lookup");renderLookup();if(!getResults().length){renderNotFound(val)}}}catch{}},500)}catch(e){status.textContent="Camera unavailable. Check permission/HTTPS."}}
 function stopScanner(){const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo");modal.hidden=true;if(scannerTimer)clearInterval(scannerTimer);scannerTimer=null;if(scannerStream)scannerStream.getTracks().forEach(t=>t.stop());scannerStream=null;video.srcObject=null}
@@ -902,7 +902,7 @@ renderAll();
     };
   }
 
-  // Improve missingToItem if available through Add Selected to Catalog wrapper:
+  // Improve missingToItem if available through Add to Catalog wrapper:
   // After adding to catalog, rebuild catalog rows with image fields when possible.
   const oldAddMissingToCatalogV14 = window.addMissingToCatalog;
   if(oldAddMissingToCatalogV14){
@@ -915,7 +915,7 @@ renderAll();
     };
   }
 
-  // Export Missing CSV should include image columns if export button is present.
+  // Export CSV should include image columns if export button is present.
   const exportMissingBtn = document.getElementById("exportMissingBtn");
   if(exportMissingBtn){
     exportMissingBtn.onclick = () => {
@@ -1128,5 +1128,376 @@ renderAll();
     document.addEventListener("keydown", function(e){
       if(e.key === "Escape" && !panel.hidden) closeTools();
     });
+  });
+})();
+
+
+/* v19 navigation redesign */
+(function(){
+  function ready(fn){ if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",fn); else fn(); }
+
+  ready(function(){
+    const settingsBtn = document.getElementById("topToolsBtn");
+    const settingsMenu = document.getElementById("settingsMenu");
+    const dataBtn = document.getElementById("openDataToolsBtn");
+    const missingBtn = document.getElementById("openMissingBtn");
+    const archiveBtn = document.getElementById("openArchiveBtn");
+    const toolsPanel = document.getElementById("topToolsPanel");
+    const closeTools = document.getElementById("closeTopToolsBtn");
+    const toolsBackdrop = toolsPanel?.querySelector(".top-tools-backdrop");
+
+    function closeSettingsMenu(){ if(settingsMenu) settingsMenu.hidden = true; if(settingsBtn) settingsBtn.setAttribute("aria-expanded","false"); }
+    function toggleSettingsMenu(e){
+      e.preventDefault(); e.stopPropagation();
+      if(settingsMenu?.hidden){ settingsMenu.hidden = false; settingsBtn?.setAttribute("aria-expanded","true"); }
+      else closeSettingsMenu();
+    }
+    function openToolsModal(){
+      closeSettingsMenu();
+      if(!toolsPanel) return;
+      toolsPanel.hidden = false;
+      toolsPanel.style.display = "flex";
+      document.body.classList.add("tools-open");
+    }
+    function closeToolsModal(){
+      if(!toolsPanel) return;
+      toolsPanel.hidden = true;
+      toolsPanel.style.display = "";
+      document.body.classList.remove("tools-open");
+    }
+
+    if(settingsBtn){
+      settingsBtn.onclick = null;
+      settingsBtn.addEventListener("click", toggleSettingsMenu, true);
+    }
+    document.addEventListener("click", function(e){
+      if(!settingsMenu || settingsMenu.hidden) return;
+      if(settingsMenu.contains(e.target) || settingsBtn?.contains(e.target)) return;
+      closeSettingsMenu();
+    });
+    if(dataBtn) dataBtn.onclick = openToolsModal;
+    if(missingBtn) missingBtn.onclick = () => { closeSettingsMenu(); switchView("missing"); };
+    if(archiveBtn) archiveBtn.onclick = () => { closeSettingsMenu(); switchView("archive"); };
+    if(closeTools) closeTools.onclick = closeToolsModal;
+    if(toolsBackdrop) toolsBackdrop.onclick = closeToolsModal;
+
+    const startFront = document.getElementById("startFrontStockBtn");
+    if(startFront) startFront.onclick = () => switchView("frontStock");
+    const backToBack = document.getElementById("backToBackStockBtn");
+    if(backToBack) backToBack.onclick = () => switchView("order");
+
+    const exportOrderBtn = document.getElementById("exportOrderBtn");
+    if(exportOrderBtn){
+      exportOrderBtn.textContent = "Export CSV";
+      exportOrderBtn.onclick = () => downloadCSV("back-stock.csv",["item_name,code,quantity",...order().map(o=>`"${(o.item_name||"").replaceAll('"','""')}",${o.code},"${String(o.qty).replaceAll('"','""')}"`)].join("\n"));
+    }
+  });
+
+  const oldCard = window.card || (typeof card !== "undefined" ? card : null);
+  if(oldCard){
+    function iconize(el, icon, label){
+      if(!el || el.dataset.iconized === "1") return;
+      el.dataset.iconized = "1";
+      el.innerHTML = `<span class="action-icon">${icon}</span><span class="action-label">${label}</span>`;
+    }
+    window.card = function(x){
+      const e = oldCard(x);
+      iconize(e.querySelector(".fav"), isFav(x.code) ? "★" : "☆", "Fav");
+      iconize(e.querySelector(".copy"), "📋", "Copy");
+      iconize(e.querySelector(".archive-catalog"), "🗄️", "Archive");
+      const a = e.querySelector('a[target="_blank"]');
+      iconize(a, "🌐", "Save-On");
+      return e;
+    };
+  }
+})();
+
+
+/* v20: settings menu fix, compact page tools, qty plus/minus */
+(function(){
+  function ready(fn){ if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",fn); else fn(); }
+
+  ready(function(){
+    const settingsBtn = document.getElementById("topToolsBtn");
+    const settingsMenu = document.getElementById("settingsMenu");
+    const toolsPanel = document.getElementById("topToolsPanel");
+    const dataBtn = document.getElementById("openDataToolsBtn");
+    const closeTools = document.getElementById("closeTopToolsBtn");
+    const toolsBackdrop = toolsPanel?.querySelector(".top-tools-backdrop");
+
+    function closeToolsModal(){
+      if(!toolsPanel) return;
+      toolsPanel.hidden = true;
+      toolsPanel.style.display = "";
+      document.body.classList.remove("tools-open");
+    }
+
+    function openToolsModal(){
+      if(settingsMenu) settingsMenu.hidden = true;
+      if(!toolsPanel) return;
+      toolsPanel.hidden = false;
+      toolsPanel.style.display = "flex";
+      document.body.classList.add("tools-open");
+    }
+
+    function toggleSettingsOnly(e){
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      e.stopPropagation();
+      closeToolsModal();
+      if(!settingsMenu) return;
+      settingsMenu.hidden = !settingsMenu.hidden;
+      settingsBtn?.setAttribute("aria-expanded", String(!settingsMenu.hidden));
+    }
+
+    if(settingsBtn){
+      // Replace older listeners by cloning button.
+      const newBtn = settingsBtn.cloneNode(true);
+      settingsBtn.parentNode.replaceChild(newBtn, settingsBtn);
+      newBtn.addEventListener("click", toggleSettingsOnly, true);
+    }
+
+    const refreshedDataBtn = document.getElementById("openDataToolsBtn");
+    if(refreshedDataBtn){
+      refreshedDataBtn.onclick = function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        openToolsModal();
+      };
+    }
+    if(closeTools) closeTools.onclick = closeToolsModal;
+    if(toolsBackdrop) toolsBackdrop.onclick = closeToolsModal;
+
+    document.addEventListener("click", function(e){
+      const currentBtn = document.getElementById("topToolsBtn");
+      if(settingsMenu && !settingsMenu.hidden && !settingsMenu.contains(e.target) && !currentBtn?.contains(e.target)){
+        settingsMenu.hidden = true;
+      }
+    });
+
+    // Make page action areas collapsible to save vertical space.
+    document.querySelectorAll(".section-head").forEach((head, idx) => {
+      const actions = head.querySelector(".order-actions");
+      if(!actions || head.querySelector(".section-tools-toggle")) return;
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "section-tools-toggle";
+      btn.textContent = "Tools ▾";
+      btn.setAttribute("aria-expanded", "false");
+
+      actions.hidden = true;
+      head.appendChild(btn);
+
+      btn.addEventListener("click", () => {
+        const open = actions.hidden;
+        actions.hidden = !open;
+        btn.textContent = open ? "Hide tools ▴" : "Tools ▾";
+        btn.setAttribute("aria-expanded", String(open));
+      });
+    });
+  });
+
+  // Enhance quantity input with -/+ buttons.
+  function enhanceQtyControls(root=document){
+    root.querySelectorAll(".qty-line").forEach(line => {
+      if(line.dataset.stepper === "1") return;
+      const input = line.querySelector(".qty-input");
+      if(!input) return;
+
+      line.dataset.stepper = "1";
+      const minus = document.createElement("button");
+      minus.type = "button";
+      minus.className = "qty-step qty-minus";
+      minus.textContent = "−";
+
+      const plus = document.createElement("button");
+      plus.type = "button";
+      plus.className = "qty-step qty-plus";
+      plus.textContent = "+";
+
+      input.insertAdjacentElement("beforebegin", minus);
+      input.insertAdjacentElement("afterend", plus);
+
+      function bump(delta){
+        const current = Number(input.value || 0);
+        let next = current + delta;
+        if(next < 0) next = 0;
+        input.value = String(next);
+        input.dispatchEvent(new Event("input", {bubbles:true}));
+        input.dispatchEvent(new Event("change", {bubbles:true}));
+      }
+
+      minus.onclick = () => bump(-1);
+      plus.onclick = () => bump(1);
+    });
+  }
+
+  const oldRenderLookup = window.renderLookup || (typeof renderLookup !== "undefined" ? renderLookup : null);
+  if(oldRenderLookup){
+    window.renderLookup = function(){
+      oldRenderLookup();
+      enhanceQtyControls(document);
+    };
+  }
+
+  const oldRenderFavorites = window.renderFavorites || (typeof renderFavorites !== "undefined" ? renderFavorites : null);
+  if(oldRenderFavorites){
+    window.renderFavorites = function(){
+      oldRenderFavorites();
+      enhanceQtyControls(document);
+    };
+  }
+
+  const oldRenderRecent = window.renderRecent || (typeof renderRecent !== "undefined" ? renderRecent : null);
+  if(oldRenderRecent){
+    window.renderRecent = function(){
+      oldRenderRecent();
+      enhanceQtyControls(document);
+    };
+  }
+
+  setTimeout(()=>enhanceQtyControls(document), 300);
+})();
+
+
+/* v21: card action icons load fix */
+(function(){
+  function iconize(el, icon, label){
+    if(!el || el.dataset.iconized === "1") return;
+    el.dataset.iconized = "1";
+    el.innerHTML = `<span class="action-icon">${icon}</span><span class="action-label">${label}</span>`;
+  }
+
+  function iconizeAllCards(){
+    document.querySelectorAll(".card").forEach(card => {
+      const fav = card.querySelector(".fav");
+      if(fav) iconize(fav, fav.classList.contains("fav-on") ? "★" : "☆", "Fav");
+
+      iconize(card.querySelector(".copy"), "📋", "Copy");
+      iconize(card.querySelector(".archive-catalog"), "🗄️", "Archive");
+
+      const saveOn = card.querySelector('a[target="_blank"]');
+      if(saveOn && /save-on/i.test(saveOn.textContent || "")) {
+        iconize(saveOn, "🌐", "Save-On");
+      }
+    });
+  }
+
+  // Patch render functions so initial page load also gets icons.
+  ["renderLookup","renderFavorites","renderRecent","renderArchive"].forEach(fnName => {
+    const original = window[fnName] || (typeof globalThis[fnName] === "function" ? globalThis[fnName] : null);
+    if(!original || original.__iconPatched) return;
+
+    const patched = function(){
+      const result = original.apply(this, arguments);
+      setTimeout(iconizeAllCards, 0);
+      return result;
+    };
+    patched.__iconPatched = true;
+    window[fnName] = patched;
+  });
+
+  // Observe result areas because some functions are defined with local scope in older builds.
+  const targets = ["results","favoritesResults","recentResults","archiveResults"].map(id => document.getElementById(id)).filter(Boolean);
+  const observer = new MutationObserver(() => iconizeAllCards());
+  targets.forEach(t => observer.observe(t, {childList:true, subtree:true}));
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", () => setTimeout(iconizeAllCards, 100));
+  } else {
+    setTimeout(iconizeAllCards, 100);
+  }
+
+  // A second pass after data loads from CSV/cache.
+  setTimeout(iconizeAllCards, 700);
+})();
+
+
+
+/* obsolete UI patch removed in v25 */
+
+
+/* obsolete UI patch removed in v25 */
+
+
+/* obsolete UI patch removed in v25 */
+
+
+/* v25 stable clean UI controller */
+(function(){
+  const down = `<svg class="chevron-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>`;
+  const up = `<svg class="chevron-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>`;
+  const infoSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M11 17h2v-6h-2v6Zm1-8.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5ZM12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20Z"/></svg>`;
+
+  function ready(fn){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",fn,{once:true}):fn()}
+
+  function showTip(text, anchor){
+    let tip=document.getElementById("sectionInfoTooltip");
+    if(!tip){tip=document.createElement("div");tip.id="sectionInfoTooltip";tip.className="section-info-tooltip";document.body.appendChild(tip)}
+    tip.textContent=text; tip.hidden=false;
+    const r=anchor.getBoundingClientRect(), pad=10;
+    tip.style.left="10px"; tip.style.top="10px";
+    const w=tip.offsetWidth||280, h=tip.offsetHeight||60;
+    let left=Math.max(pad, Math.min(window.innerWidth-w-pad, r.left));
+    let top=r.bottom+8;
+    if(top+h>window.innerHeight-pad) top=r.top-h-8;
+    tip.style.left=left+"px"; tip.style.top=Math.max(pad,top)+"px";
+  }
+
+  function setupHeader(head){
+    const h2=head?.querySelector("h2"), p=head?.querySelector("p"), actions=head?.querySelector(".order-actions");
+    if(!h2) return;
+    head.querySelectorAll(".section-tools-toggle").forEach(x=>x.remove());
+    h2.querySelectorAll(".section-info-btn,.section-tools-icon").forEach(x=>x.remove());
+    h2.classList.add("section-title-row");
+    if(p){
+      const b=document.createElement("button");
+      b.type="button"; b.className="section-info-btn"; b.innerHTML=infoSvg; b.setAttribute("aria-label","Info");
+      b.onclick=e=>{e.preventDefault();e.stopPropagation();showTip(p.textContent.trim(),b)};
+      h2.appendChild(b);
+    }
+    if(actions){
+      if(!actions.dataset.v25Ready){actions.hidden=true; actions.dataset.v25Ready="1";}
+      const t=document.createElement("button");
+      t.type="button"; t.className="section-tools-icon"; t.innerHTML=actions.hidden?down:up;
+      t.setAttribute("aria-expanded",String(!actions.hidden));
+      t.onclick=e=>{e.preventDefault();e.stopPropagation();const open=actions.hidden;actions.hidden=!open;t.innerHTML=open?up:down;t.setAttribute("aria-expanded",String(open));};
+      h2.appendChild(t);
+    }
+  }
+
+  function setupHeaders(){document.querySelectorAll(".section-head").forEach(setupHeader)}
+
+  function stepper(root=document){
+    root.querySelectorAll(".qty-line").forEach(line=>{
+      line.querySelectorAll(".qty-step").forEach(x=>x.remove());
+      const input=line.querySelector(".qty-input"); if(!input) return;
+      const m=document.createElement("button"), p=document.createElement("button");
+      m.type=p.type="button"; m.className="qty-step qty-minus"; p.className="qty-step qty-plus"; m.textContent="−"; p.textContent="+";
+      input.insertAdjacentElement("beforebegin",m); input.insertAdjacentElement("afterend",p);
+      const bump=d=>{let n=Number(input.value||0)+d; if(n<0)n=0; input.value=String(n); input.dispatchEvent(new Event("input",{bubbles:true})); input.dispatchEvent(new Event("change",{bubbles:true}));};
+      m.onclick=()=>bump(-1); p.onclick=()=>bump(1);
+    });
+  }
+
+  function iconize(el,icon,label){if(!el)return; el.innerHTML=`<span class="action-icon">${icon}</span><span class="action-label">${label}</span>`;}
+  function cards(root=document){
+    root.querySelectorAll(".card").forEach(c=>{
+      const fav=c.querySelector(".fav"); if(fav) iconize(fav,fav.classList.contains("fav-on")?"★":"☆","Fav");
+      iconize(c.querySelector(".copy"),"📋","Copy");
+      iconize(c.querySelector(".archive-catalog"),"🗄️","Archive");
+      iconize(c.querySelector('a[target="_blank"]'),"🌐","Save-On");
+    });
+  }
+
+  function apply(){setupHeaders(); stepper(); cards();}
+  ready(()=>{
+    apply();
+    const targets=["results","favoritesResults","recentResults","archiveResults","missingResults","orderResults"].map(id=>document.getElementById(id)).filter(Boolean);
+    const obs=new MutationObserver(()=>{clearTimeout(window.__v25Timer); window.__v25Timer=setTimeout(apply,0);});
+    targets.forEach(t=>obs.observe(t,{childList:true}));
+    document.addEventListener("click",e=>{const tip=document.getElementById("sectionInfoTooltip"); if(tip&&!tip.hidden&&!e.target.closest(".section-info-btn")&&!e.target.closest(".section-info-tooltip")) tip.hidden=true;});
+    setTimeout(apply,300); setTimeout(apply,900);
   });
 })();
