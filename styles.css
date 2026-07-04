@@ -974,3 +974,559 @@ body.tools-open{
 .action-icon{font-size:1.05rem;line-height:1}
 .action-label{font-size:.66rem;line-height:1;font-weight:800}
 @media(max-width:540px){.qty-line{grid-template-columns:auto 32px minmax(46px,1fr) 32px auto!important;gap:6px!important}.qty-step{width:32px;height:32px}}
+
+
+/* v26 Front Stock */
+.front-stock-toolbar{padding:10px;margin-bottom:10px}
+.front-stock-toolbar label{display:flex;flex-direction:column;gap:6px;font-size:.85rem;font-weight:800}
+.front-results{display:grid;gap:8px;margin-top:8px}
+.front-result-card{background:#fff;border:1px solid var(--b);border-radius:12px;padding:9px;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+.front-result-main h3{margin:0 0 2px;font-size:.95rem}
+.front-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.back-stock-chip,.front-stock-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:999px;font-size:.76rem;font-weight:900}
+.back-stock-chip{background:#fff3cd;color:#755900}.front-stock-chip{background:#e8f5e9;color:#08763d}
+.front-qty-line{display:grid;grid-template-columns:32px 56px 32px;gap:5px;align-items:center}
+.front-qty-input{width:56px;border:1px solid #bfc4c7;border-radius:9px;padding:8px 6px;text-align:center;font-weight:900}
+.compact-msg{padding:9px!important}.front-stock-item .remove-front{padding:7px 9px;font-size:.78rem}
+@media(max-width:540px){.front-stock-toolbar{padding:8px}.front-result-card{grid-template-columns:1fr}.front-qty-line{grid-template-columns:38px 1fr 38px}.front-qty-input{width:100%}}
+
+/* v27 left drawer + workflow shell */
+.drawer-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.45);color:#fff;min-width:42px;margin-right:8px}
+.drawer-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:130}.drawer-backdrop[hidden]{display:none!important}
+.app-drawer{position:fixed;left:0;top:0;bottom:0;width:min(320px,84vw);background:#fff;z-index:150;transform:translateX(-102%);transition:transform .22s ease;box-shadow:6px 0 24px #0004;display:flex;flex-direction:column}
+.app-drawer.open{transform:translateX(0)}
+.drawer-head{background:#087763;color:#fff;padding:14px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.drawer-head strong{display:block;font-size:1rem}.drawer-head small{display:block;opacity:.85;margin-top:3px}
+#closeDrawerBtn{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.45);width:32px;height:32px;padding:0;border-radius:50%}
+.drawer-nav{padding:10px;overflow:auto}.drawer-nav button{width:100%;display:flex;align-items:center;gap:10px;justify-content:flex-start;background:#fff;color:#173b35;border:1px solid #e4e8e9;border-radius:11px;padding:10px;margin-bottom:7px;font-weight:800}
+.drawer-group-title{font-size:.72rem;font-weight:900;color:#667;text-transform:uppercase;letter-spacing:.04em;margin:13px 4px 7px}
+.dashboard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.dashboard-card{background:#fff;border:1px solid var(--b);border-radius:14px;padding:12px}.dashboard-card h3{margin:0 0 6px;font-size:.98rem}.dashboard-card p{margin:0 0 10px;font-weight:900}
+.status-draft{color:#9a6a00}.status-placed{color:#08763d}.order-locked #orderView .qty-input,.order-locked #frontStockView input{background:#f1f3f4!important;color:#777!important}.order-locked #orderView .qty-step,.order-locked #frontStockView .qty-step{opacity:.55}
+@media(max-width:640px){.drawer-btn{min-width:38px;padding:8px 10px}.dashboard-grid{grid-template-columns:1fr}}
+
+
+/* v28 dashboard tiles + order history */
+.header-actions:empty{display:none}
+.dash-tiles{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:10px;
+}
+.dash-tile{
+  background:#fff;
+  border:1px solid var(--b);
+  border-radius:16px;
+  padding:12px;
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  gap:10px;
+  align-items:center;
+  box-shadow:0 2px 8px #00000010;
+}
+.dash-tile .tile-icon{
+  width:42px;
+  height:42px;
+  border-radius:14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#eef6f4;
+  font-size:1.35rem;
+}
+.dash-tile h3{
+  margin:0 0 3px;
+  font-size:.98rem;
+}
+.dash-tile p{
+  margin:0;
+  font-weight:900;
+}
+.dash-tile button{
+  padding:7px 10px;
+  border-radius:10px;
+}
+.order-history-list{
+  display:grid;
+  gap:8px;
+  margin-top:10px;
+}
+.history-card{
+  background:#fff;
+  border:1px solid var(--b);
+  border-radius:14px;
+  padding:10px;
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:8px;
+  align-items:center;
+}
+.history-card h3{
+  margin:0 0 3px;
+  font-size:.95rem;
+}
+.history-card p{
+  margin:0 0 6px;
+  color:#5e6668;
+  font-size:.78rem;
+}
+.history-meta{
+  display:flex;
+  gap:7px;
+  flex-wrap:wrap;
+}
+.history-meta span{
+  background:#eef6f4;
+  color:#087763;
+  border-radius:999px;
+  padding:3px 7px;
+  font-size:.74rem;
+  font-weight:900;
+}
+@media(max-width:640px){
+  .dash-tiles{grid-template-columns:1fr}
+  .dash-tile{grid-template-columns:auto 1fr auto;padding:10px}
+  .dash-tile .tile-icon{width:38px;height:38px;font-size:1.2rem}
+}
+
+
+/* v29 dashboard circular grid */
+.dash-tiles{display:none!important}
+.dash-icon-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+  gap:12px;
+  margin:10px 0;
+}
+.dash-icon-card{
+  background:#fff;
+  border:1px solid var(--b);
+  border-radius:16px;
+  padding:12px 8px;
+  min-height:142px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  color:#173b35;
+  box-shadow:0 2px 8px #00000010;
+}
+.dash-icon-card:disabled{
+  opacity:.72;
+}
+.dash-circle{
+  width:72px;
+  height:72px;
+  border-radius:50%;
+  border:1px solid #d6e4e0;
+  background:#f6fbfa;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:1.75rem;
+}
+.dash-icon-card strong{
+  font-size:.88rem;
+  line-height:1.1;
+}
+.dash-icon-card small{
+  font-size:.73rem;
+  color:#5e6668;
+  font-weight:800;
+  line-height:1.1;
+}
+@media(max-width:420px){
+  .dash-icon-grid{
+    grid-template-columns:repeat(2,1fr);
+    gap:10px;
+  }
+  .dash-icon-card{
+    min-height:126px;
+    padding:10px 6px;
+  }
+  .dash-circle{
+    width:64px;
+    height:64px;
+    font-size:1.55rem;
+  }
+}
+
+
+/* v30 sticky section headers + order lock */
+header{position:sticky!important;top:0!important;z-index:100!important}
+.view > .section-head,.view > .panel.section-head{
+  position:sticky!important;
+  top:var(--header-h,58px)!important;
+  z-index:80!important;
+  width:100%!important;
+  border-radius:0!important;
+  margin-left:calc(-1 * var(--page-pad,10px))!important;
+  margin-right:calc(-1 * var(--page-pad,10px))!important;
+  padding-left:calc(var(--page-pad,10px) + 4px)!important;
+  padding-right:calc(var(--page-pad,10px) + 4px)!important;
+  border-left:0!important;border-right:0!important;
+  box-shadow:0 2px 7px #00000018!important;
+}
+main{--page-pad:10px}
+.section-title-row{min-height:30px}
+.header-back-btn{
+  width:28px!important;height:26px!important;padding:0!important;margin-right:3px!important;border-radius:9px!important;
+  background:#edf1f2!important;color:#087763!important;border:1px solid #cbd4d6!important;
+  display:inline-flex!important;align-items:center!important;justify-content:center!important;font-weight:900!important;flex:0 0 auto!important;
+}
+.order-locked #orderView .qty-input,.order-locked #frontStockView input{background:#f1f3f4!important;color:#777!important;pointer-events:none!important}
+.order-locked #orderView .qty-step,.order-locked #orderView .danger,.order-locked #frontStockView .qty-step,.order-locked #frontStockView .danger,.order-locked #frontStockView .remove-front,.order-locked #frontStockView #frontScanBtn{
+  opacity:.5!important;pointer-events:none!important;
+}
+@media(max-width:640px){.view > .section-head,.view > .panel.section-head{top:56px!important}}
+
+
+/* v31 navbar/header spacing fix */
+:root{
+  --navbar-height:58px;
+  --header-h:58px;
+  --page-pad:10px;
+}
+
+.view > .section-head,
+.view > .panel.section-head{
+  top:var(--navbar-height,58px)!important;
+  margin-top:0!important;
+  margin-bottom:8px!important;
+}
+
+main{
+  padding-top:4px!important;
+}
+
+@media(max-width:640px){
+  main{
+    padding-top:2px!important;
+  }
+
+  .view > .section-head,
+  .view > .panel.section-head{
+    top:var(--navbar-height,56px)!important;
+    margin-top:0!important;
+  }
+}
+
+
+/* v32 fixed navbar + fixed page header without hiding content */
+:root{
+  --navbar-height:58px;
+  --page-header-height:44px;
+  --fixed-top-total:102px;
+  --page-pad:10px;
+}
+
+header{
+  position:fixed!important;
+  top:0!important;
+  left:0!important;
+  right:0!important;
+  z-index:200!important;
+  border-radius:0!important;
+}
+
+.view > .section-head,
+.view > .panel.section-head{
+  position:fixed!important;
+  top:var(--navbar-height,58px)!important;
+  left:0!important;
+  right:0!important;
+  z-index:180!important;
+  width:100%!important;
+  margin:0!important;
+  border-radius:0!important;
+  border-left:0!important;
+  border-right:0!important;
+  border-top:0!important;
+  box-shadow:0 2px 7px #00000020!important;
+  padding:8px 12px!important;
+}
+
+main{
+  padding-top:calc(var(--fixed-top-total,102px) + 8px)!important;
+}
+
+body.mobile-bottom-ui main{
+  padding-top:calc(var(--fixed-top-total,102px) + 8px)!important;
+}
+
+.view{
+  scroll-margin-top:var(--fixed-top-total,102px);
+}
+
+/* prevent old sticky overrides from creating gaps */
+.view > .section-head + *,
+.view > .panel.section-head + *{
+  margin-top:0!important;
+}
+
+@media(max-width:640px){
+  .view > .section-head,
+  .view > .panel.section-head{
+    padding:7px 10px!important;
+  }
+
+  main,
+  body.mobile-bottom-ui main{
+    padding-top:calc(var(--fixed-top-total,100px) + 6px)!important;
+  }
+}
+
+
+/* v33 lookup page header */
+.lookup-page-header{
+  display:block;
+}
+.lookup-page-header h2{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+
+/* v34 visible lookup fixed header */
+#lookupView > .lookup-page-header{
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+}
+
+#lookupView > .lookup-page-header h2{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:6px!important;
+  margin:0!important;
+}
+
+/* Ensure lookup content starts under the fixed Lookup header */
+#lookupView{
+  min-height:100%;
+}
+
+
+/* v35 Lookup panel fix */
+#lookupView > .lookup-page-header{
+  position:fixed!important;
+  top:var(--navbar-height,58px)!important;
+  left:0!important;
+  right:0!important;
+  z-index:180!important;
+  width:100%!important;
+  margin:0!important;
+  border-radius:0!important;
+}
+
+/* Prevent the normal Lookup panel from becoming a giant full-screen fixed overlay */
+#lookupView > .panel:not(.lookup-page-header):not(.section-head){
+  position:relative!important;
+  top:auto!important;
+  left:auto!important;
+  right:auto!important;
+  bottom:auto!important;
+  width:auto!important;
+  height:auto!important;
+  min-height:0!important;
+  transform:none!important;
+  opacity:1!important;
+  pointer-events:auto!important;
+}
+
+/* Keep the intended mobile bottom search drawer, but limit its height */
+@media(max-width:640px){
+  body.mobile-bottom-ui:not(.search-drawer-closed) #lookupView > .panel:not(.lookup-page-header):not(.section-head){
+    position:fixed!important;
+    left:0!important;
+    right:0!important;
+    bottom:52px!important;
+    top:auto!important;
+    width:100%!important;
+    height:auto!important;
+    max-height:48vh!important;
+    overflow:auto!important;
+    border-radius:16px 16px 0 0!important;
+    z-index:70!important;
+  }
+
+  body.mobile-bottom-ui.search-drawer-closed #lookupView > .panel:not(.lookup-page-header):not(.section-head){
+    transform:translateY(calc(100% + 70px))!important;
+    opacity:0!important;
+    pointer-events:none!important;
+  }
+}
+
+
+/* v36 layout reset for Lookup */
+#lookupView > .lookup-page-header{
+  display:none!important;
+}
+
+/* Fixed title bar that is separate from lookup panels */
+.fixed-page-title{
+  position:fixed;
+  top:var(--navbar-height,58px);
+  left:0;
+  right:0;
+  z-index:185;
+  min-height:38px;
+  background:#fff8cf;
+  border-bottom:2px solid #1d1d1d;
+  padding:8px 12px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  box-shadow:0 2px 6px #00000018;
+}
+.fixed-page-title[hidden]{
+  display:none!important;
+}
+.fixed-page-title strong{
+  font-size:1rem;
+}
+#lookupInfoBtn{
+  width:22px;
+  height:22px;
+  padding:0;
+  border-radius:50%;
+  background:#eef6f4;
+  color:#087763;
+  border:1px solid #b8d8d0;
+  font-weight:900;
+}
+
+/* The Lookup search box panel must remain the bottom drawer on mobile, not the page header */
+@media(max-width:640px){
+  body.mobile-bottom-ui #lookupView > .panel:not(.section-head):not(.lookup-page-header){
+    position:fixed!important;
+    left:0!important;
+    right:0!important;
+    bottom:52px!important;
+    top:auto!important;
+    width:100%!important;
+    height:auto!important;
+    min-height:0!important;
+    max-height:46vh!important;
+    overflow:auto!important;
+    border-radius:16px 16px 0 0!important;
+    transform:none!important;
+    opacity:1!important;
+    z-index:70!important;
+  }
+
+  body.mobile-bottom-ui.search-drawer-closed #lookupView > .panel:not(.section-head):not(.lookup-page-header){
+    transform:translateY(calc(100% + 70px))!important;
+    opacity:0!important;
+    pointer-events:none!important;
+  }
+}
+
+/* On desktop, the Lookup search panel remains normal in the document */
+@media(min-width:641px){
+  #lookupView > .panel:not(.section-head):not(.lookup-page-header){
+    position:relative!important;
+    top:auto!important;
+    left:auto!important;
+    right:auto!important;
+    bottom:auto!important;
+    width:auto!important;
+    height:auto!important;
+    max-height:none!important;
+    transform:none!important;
+    opacity:1!important;
+  }
+}
+
+
+/* v37 preserved user tweaks */
+.app-drawer{
+  z-index:210!important;
+}
+.fixed-page-title{
+  background:#fff!important;
+  border:1px solid var(--b)!important;
+  border-left:0!important;
+  border-right:0!important;
+}
+
+
+/* v37 layout cleanup: remove unnecessary bottom empty space */
+:root{
+  --bottom-nav-height:58px;
+  --search-drawer-height:0px;
+}
+
+/* General content should only reserve space for bottom nav, not huge stacked values */
+main{
+  padding-bottom:calc(var(--bottom-nav-height) + 14px + env(safe-area-inset-bottom))!important;
+}
+
+/* Remove old exaggerated footer/main padding rules */
+body.mobile-bottom-ui main,
+body.mobile-bottom-ui footer,
+body.mobile-bottom-ui:not(.search-drawer-closed) main,
+body.mobile-bottom-ui:not(.search-drawer-closed) footer{
+  padding-bottom:calc(var(--bottom-nav-height) + 14px + env(safe-area-inset-bottom))!important;
+}
+
+/* Lookup is special: when the bottom search drawer is open, reserve less content padding because drawer is fixed */
+body.mobile-bottom-ui #lookupView{
+  padding-bottom:0!important;
+}
+
+/* Avoid large artificial vertical height after content */
+.view{
+  min-height:auto!important;
+  padding-bottom:0!important;
+}
+.results,
+.order-list,
+.order-history-list,
+.dashboard-grid,
+.dash-icon-grid,
+.front-results{
+  margin-bottom:0!important;
+  padding-bottom:0!important;
+}
+
+/* Last element on every view should not create extra bottom gap */
+.view > *:last-child,
+.results > *:last-child,
+.order-list > *:last-child,
+.order-history-list > *:last-child{
+  margin-bottom:0!important;
+}
+
+/* Keep bottom nav compact */
+.tabs{
+  min-height:var(--bottom-nav-height)!important;
+}
+
+/* Keep the mobile search drawer compact instead of occupying too much viewport */
+@media(max-width:640px){
+  body.mobile-bottom-ui #lookupView > .panel:not(.section-head):not(.lookup-page-header){
+    max-height:42vh!important;
+  }
+
+  main,
+  body.mobile-bottom-ui main,
+  body.mobile-bottom-ui footer,
+  body.mobile-bottom-ui:not(.search-drawer-closed) main,
+  body.mobile-bottom-ui:not(.search-drawer-closed) footer{
+    padding-bottom:calc(var(--bottom-nav-height) + 10px + env(safe-area-inset-bottom))!important;
+  }
+
+  /* If search drawer is closed, only bottom nav space is needed */
+  body.mobile-bottom-ui.search-drawer-closed main{
+    padding-bottom:calc(var(--bottom-nav-height) + 10px + env(safe-area-inset-bottom))!important;
+  }
+}
+
+/* Desktop should not inherit mobile-style big bottom padding */
+@media(min-width:641px){
+  main{
+    padding-bottom:24px!important;
+  }
+}

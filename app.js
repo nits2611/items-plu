@@ -1501,3 +1501,500 @@ renderAll();
     setTimeout(apply,300); setTimeout(apply,900);
   });
 })();
+
+
+/* v26 Final Order v1 */
+(function(){
+function ready(fn){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",fn,{once:true}):fn()}
+function frontStock(){return getJSON(key("front_stock"),[])}
+function setFrontStock(v){setJSON(key("front_stock"),v)}
+function backQty(code){const f=order().find(x=>String(x.code)===String(code));return f?f.qty:""}
+function frontQty(code){const f=frontStock().find(x=>String(x.code)===String(code));return f?f.qty:""}
+function esc(v){return `"${String(v??"").replaceAll('"','""')}"`}
+
+function saveFront(item,qty){
+ qty=String(qty||"").trim();
+ let list=frontStock().filter(x=>String(x.code)!==String(item.code));
+ if(qty&&Number(qty)>0){
+  list.unshift({code:item.code,qty,item_name:item.item_name,back_qty:backQty(item.code),addedAt:new Date().toISOString()});
+  toast(`${item.item_name} saved to final order: ${qty}`);
+ }else{toast(`${item.item_name} removed from final order`)}
+ setFrontStock(list); renderFrontStock(); renderFrontSearchResults();
+}
+
+function matches(qv){
+ const terms=String(qv||"").trim().toLowerCase().split(/\s+/).filter(Boolean);
+ if(!terms.length)return [];
+ return (items||[]).filter(x=>terms.every(t=>String(x.hay||"").includes(t)||String(x.item_name||"").toLowerCase().includes(t)||String(x.code||"").toLowerCase().includes(t))).slice(0,25);
+}
+
+function resultCard(item){
+ const e=document.createElement("article"); e.className="front-result-card";
+ const b=backQty(item.code), f=frontQty(item.code);
+ e.innerHTML=`<div class="front-result-main"><h3></h3><div class="code"></div><div class="front-meta"><span class="back-stock-chip">Back: <b></b></span><span class="front-stock-chip">Front: <b></b></span></div></div><div class="front-qty-line"><button type="button" class="qty-step front-minus">−</button><input class="front-qty-input" type="number" inputmode="decimal" min="0" step="1" placeholder="0"><button type="button" class="qty-step front-plus">+</button></div>`;
+ e.querySelector("h3").textContent=item.item_name; e.querySelector(".code").textContent=item.code;
+ e.querySelector(".back-stock-chip b").textContent=b||"0"; e.querySelector(".front-stock-chip b").textContent=f||"0";
+ const input=e.querySelector(".front-qty-input"); input.value=f||"";
+ let timer=null; const saveNow=()=>{clearTimeout(timer); saveFront(item,input.value)};
+ input.addEventListener("input",()=>{clearTimeout(timer); timer=setTimeout(()=>saveFront(item,input.value),450)});
+ input.addEventListener("change",saveNow);
+ e.querySelector(".front-minus").onclick=()=>{let n=Number(input.value||0)-1;if(n<0)n=0;input.value=String(n);saveNow()};
+ e.querySelector(".front-plus").onclick=()=>{input.value=String(Number(input.value||0)+1);saveNow()};
+ return e;
+}
+
+window.renderFrontSearchResults=function(){
+ const q=document.getElementById("frontQ"), box=document.getElementById("frontSearchResults"); if(!q||!box)return;
+ const query=q.value.trim(); box.innerHTML="";
+ if(!query){box.innerHTML='<section class="message compact-msg">Search or scan an item to enter final order quantity.</section>';return}
+ const arr=matches(query);
+ if(!arr.length){
+  const m=document.createElement("section"); m.className="message compact-msg";
+  m.innerHTML='<strong>No local match found.</strong><div class="not-found-actions"><a class="button-link" target="_blank" rel="noopener">Check Save-On</a><button type="button">Add Missing</button></div>';
+  m.querySelector("a").href=saveOnSearchUrl(query); m.querySelector("button").onclick=()=>saveMissing(query); box.appendChild(m); return;
+ }
+ arr.forEach(x=>box.appendChild(resultCard(x)));
+};
+
+window.renderFrontStock=function(){
+ const box=document.getElementById("frontStockResults"); if(!box)return; box.innerHTML="";
+ const list=frontStock();
+ if(!list.length){box.innerHTML='<section class="message">No final order items yet. Search or scan items above.</section>';return}
+ list.forEach(row=>{
+  const e=document.createElement("article"); e.className="order-item front-stock-item";
+  e.innerHTML='<div class="order-row"><div><h3></h3><div class="code"></div><div class="front-meta"><span class="back-stock-chip">Back: <b></b></span><span class="front-stock-chip">Front: <b></b></span></div></div><button type="button" class="danger remove-front">Remove</button></div>';
+  e.querySelector("h3").textContent=row.item_name||row.code; e.querySelector(".code").textContent=row.code;
+  e.querySelector(".back-stock-chip b").textContent=row.back_qty||backQty(row.code)||"0"; e.querySelector(".front-stock-chip b").textContent=row.qty;
+  e.querySelector(".remove-front").onclick=()=>{setFrontStock(frontStock().filter(x=>String(x.code)!==String(row.code)));renderFrontStock();renderFrontSearchResults()};
+  box.appendChild(e);
+ });
+};
+
+function exportFront(){
+ const rows=["item_name,code,back_stock_qty,front_stock_qty,date"];
+ frontStock().forEach(x=>rows.push([x.item_name||"",x.code||"",x.back_qty||backQty(x.code)||"",x.qty||"",x.addedAt||""].map(esc).join(",")));
+ downloadCSV("final-order.csv",rows.join("\n"));
+}
+function exportCombined(){
+ const fm=new Map(frontStock().map(x=>[String(x.code),x])); const b=order(); const codes=new Set([...b.map(x=>String(x.code)),...fm.keys()]);
+ const rows=["item_name,code,back_stock_qty,front_stock_qty"];
+ codes.forEach(code=>{const br=b.find(x=>String(x.code)===code), fr=fm.get(code); rows.push([fr?.item_name||br?.item_name||"",code,br?.qty||"",fr?.qty||""].map(esc).join(","))});
+ downloadCSV("back-final-order.csv",rows.join("\n"));
+}
+
+ready(function(){
+ const start=document.getElementById("startFrontStockBtn"); if(start)start.onclick=()=>switchView("frontStock");
+ const back=document.getElementById("backToBackStockBtn"); if(back)back.onclick=()=>switchView("order");
+ const q=document.getElementById("frontQ"); if(q)q.addEventListener("input",renderFrontSearchResults);
+ const scan=document.getElementById("frontScanBtn"); if(scan)scan.onclick=()=>{document.getElementById("scanBtn")?.click();toast("Scan code, then search it in Final Order")};
+ const ex=document.getElementById("exportFrontStockBtn"); if(ex)ex.onclick=exportFront;
+ const comb=document.getElementById("exportCombinedStockBtn"); if(comb)comb.onclick=exportCombined;
+ const clr=document.getElementById("clearFrontStockBtn"); if(clr)clr.onclick=()=>{if(confirm("Clear final order list?")){setFrontStock([]);renderFrontStock();renderFrontSearchResults()}};
+ renderFrontStock(); renderFrontSearchResults();
+});
+})();
+
+
+/* v27 left drawer + workflow shell */
+(function(){
+function ready(f){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",f,{once:true}):f()}
+function status(){return localStorage.getItem(key("order_status"))||"Draft"}
+function setStatus(s){localStorage.setItem(key("order_status"),s);summary();lockState()}
+function finalList(){try{return getJSON(key("front_stock"),[])}catch{return[]}}
+function openDrawer(){let d=document.getElementById("appDrawer"),b=document.getElementById("drawerBackdrop");if(!d)return;d.classList.add("open");d.setAttribute("aria-hidden","false");if(b)b.hidden=false;document.body.classList.add("drawer-open")}
+function closeDrawer(){let d=document.getElementById("appDrawer"),b=document.getElementById("drawerBackdrop");if(!d)return;d.classList.remove("open");d.setAttribute("aria-hidden","true");if(b)b.hidden=true;document.body.classList.remove("drawer-open")}
+function tools(){closeDrawer();let p=document.getElementById("topToolsPanel");if(p){p.hidden=false;p.style.display="flex";document.body.classList.add("tools-open")}}
+function go(v){closeDrawer();switchView(v);setTimeout(summary,50)}
+window.refreshWorkflowSummary=summary;
+function summary(){
+ let back=(typeof order==="function"?order():[]).length, fin=finalList().length, miss=(typeof missingItems==="function"?missingItems():[]).length, st=status();
+ [["dashBackCount",back],["orderBackCount",back],["dashFinalCount",fin],["orderFinalCount",fin],["dashMissingCount",miss]].forEach(([i,v])=>{let e=document.getElementById(i);if(e)e.textContent=v});
+ ["dashOrderStatus","orderSessionStatus"].forEach(i=>{let e=document.getElementById(i);if(e){e.textContent=st;e.className=st==="Placed"?"status-placed":"status-draft"}});
+}
+function lockState(){let locked=status()==="Placed";document.body.classList.toggle("order-locked",locked);document.querySelectorAll("#orderView input,#orderView button,#frontStockView input,#frontStockView button").forEach(el=>{if(el.id==="unlockOrderBtn"||el.id==="backToBackStockBtn")return;el.disabled=locked})}
+ready(function(){
+ document.getElementById("drawerBtn")?.addEventListener("click",openDrawer);
+ document.getElementById("closeDrawerBtn")?.addEventListener("click",closeDrawer);
+ document.getElementById("drawerBackdrop")?.addEventListener("click",closeDrawer);
+ document.querySelectorAll("[data-drawer-action]").forEach(btn=>btn.onclick=()=>{let a=btn.dataset.drawerAction;if(a==="dashboard")go("dashboard");else if(a==="orders"||a==="today-order")go("orders");else if(a==="inventory")go("inventory");else if(a==="missing")go("missing");else if(a==="archive")go("archive");else if(a==="data-tools")tools()});
+ document.getElementById("dashGoOrderBtn")?.addEventListener("click",()=>go("orders"));
+ document.getElementById("dashGoStockBtn")?.addEventListener("click",()=>go("order"));
+ document.getElementById("dashGoFinalBtn")?.addEventListener("click",()=>go("frontStock"));
+ document.getElementById("dashGoMissingBtn")?.addEventListener("click",()=>go("missing"));
+ document.getElementById("continueOrderBtn")?.addEventListener("click",()=>go("order"));
+ document.getElementById("ordersBackStockBtn")?.addEventListener("click",()=>go("order"));
+ document.getElementById("ordersFinalOrderBtn")?.addEventListener("click",()=>go("frontStock"));
+ document.getElementById("markOrderPlacedBtn")?.addEventListener("click",()=>{if(confirm("Mark today's order as placed? This will lock editing.")){setStatus("Placed");toast("Order marked as placed")}});
+ document.getElementById("unlockOrderBtn")?.addEventListener("click",()=>{if(confirm("Unlock today's order as draft?")){setStatus("Draft");toast("Order unlocked")}});
+ let sx=0,sy=0,track=false;window.addEventListener("touchstart",e=>{let t=e.touches[0];sx=t.clientX;sy=t.clientY;track=sx<35},{passive:true});window.addEventListener("touchmove",e=>{if(!track)return;let t=e.touches[0],dx=t.clientX-sx,dy=Math.abs(t.clientY-sy);if(dx>70&&dy<45){openDrawer();track=false}},{passive:true});
+ window.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer()});
+ summary();lockState();
+ let obs=new MutationObserver(()=>setTimeout(summary,50));["orderResults","frontStockResults","missingResults"].map(i=>document.getElementById(i)).filter(Boolean).forEach(t=>obs.observe(t,{childList:true}));
+});
+})();
+
+
+/* v28 dashboard + order history + remove settings menu */
+(function(){
+function ready(f){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",f,{once:true}):f()}
+function esc(v){return `"${String(v??"").replaceAll('"','""')}"`}
+function todayKey(){return new Date().toISOString().slice(0,10)}
+function orderHistory(){return getJSON(key("order_history"),[])}
+function setOrderHistory(v){setJSON(key("order_history"),v)}
+function finalList(){try{return getJSON(key("front_stock"),[])}catch{return[]}}
+function status(){return localStorage.getItem(key("order_status"))||"Draft"}
+function setStatus(s){localStorage.setItem(key("order_status"),s); if(window.refreshWorkflowSummary) window.refreshWorkflowSummary(); renderOrderHistory(); applyLock();}
+function applyLock(){document.body.classList.toggle("order-locked",status()==="Placed")}
+function snapshotOrder(){
+ const date=todayKey();
+ const back=(typeof order==="function"?order():[]);
+ const final=finalList();
+ const snap={id:date+"-"+Date.now(),date,placedAt:new Date().toISOString(),status:"Placed",backStock:back,finalOrder:final};
+ let hist=orderHistory().filter(x=>x.date!==date);
+ hist.unshift(snap);
+ setOrderHistory(hist.slice(0,100));
+ setStatus("Placed");
+ toast("Order placed and saved to history");
+}
+function exportHistoryOrder(id){
+ const h=orderHistory().find(x=>x.id===id); if(!h)return;
+ const rows=["section,item_name,code,quantity"];
+ (h.backStock||[]).forEach(x=>rows.push(["Back Stock",x.item_name||"",x.code||"",x.qty||""].map(esc).join(",")));
+ (h.finalOrder||[]).forEach(x=>rows.push(["Final Order",x.item_name||"",x.code||"",x.qty||""].map(esc).join(",")));
+ downloadCSV(`order-${h.date}.csv`,rows.join("\n"));
+}
+window.renderOrderHistory=function(){
+ const boxes=[document.getElementById("orderHistoryResults"),document.getElementById("ordersHistoryInline")].filter(Boolean);
+ const hist=orderHistory();
+ boxes.forEach(box=>{
+  box.innerHTML="";
+  if(!hist.length){box.innerHTML='<section class="message compact-msg">No placed orders yet.</section>';return}
+  hist.forEach(h=>{
+    const e=document.createElement("article"); e.className="history-card";
+    e.innerHTML=`<div><h3></h3><p></p><div class="history-meta"><span>Back: <b></b></span><span>Final: <b></b></span></div></div><button type="button">Export</button>`;
+    e.querySelector("h3").textContent=new Date(h.placedAt||h.date).toLocaleDateString();
+    e.querySelector("p").textContent=`Placed ${h.placedAt?new Date(h.placedAt).toLocaleTimeString():""}`;
+    e.querySelector(".history-meta b").textContent=(h.backStock||[]).length;
+    e.querySelectorAll(".history-meta b")[1].textContent=(h.finalOrder||[]).length;
+    e.querySelector("button").onclick=()=>exportHistoryOrder(h.id);
+    box.appendChild(e);
+  });
+ });
+};
+ready(function(){
+ // Hide/disable old top-right settings button if any remains.
+ document.getElementById("topToolsBtn")?.remove();
+ document.getElementById("settingsMenu")?.remove();
+
+ document.getElementById("markOrderPlacedBtn")?.addEventListener("click",e=>{
+   e.stopImmediatePropagation();
+   if(status()==="Placed"){toast("Order already placed"); return}
+   if(confirm("Mark today's order as placed? This will save it by date and lock editing.")) snapshotOrder();
+ }, true);
+
+ document.getElementById("unlockOrderBtn")?.addEventListener("click",e=>{
+   e.stopImmediatePropagation();
+   if(confirm("Unlock today's order as Draft?")) setStatus("Draft");
+ }, true);
+
+ renderOrderHistory();
+ applyLock();
+ setTimeout(renderOrderHistory,300);
+});
+})();
+
+
+/* v29 dashboard grid + easier Mark Placed */
+(function(){
+function ready(f){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",f,{once:true}):f()}
+function status(){return localStorage.getItem(key("order_status"))||"Draft"}
+function setStatus(s){localStorage.setItem(key("order_status"),s); if(window.refreshWorkflowSummary) window.refreshWorkflowSummary(); if(window.renderOrderHistory) window.renderOrderHistory();}
+function finalList(){try{return getJSON(key("front_stock"),[])}catch{return[]}}
+function snapshotOrderV29(){
+ if(status()==="Placed"){toast("Order already placed");return}
+ const back=(typeof order==="function"?order():[]);
+ const final=finalList();
+ if(!back.length && !final.length){
+   if(!confirm("Back Stock and Final Order are empty. Mark empty order as placed?")) return;
+ } else {
+   if(!confirm("Mark today’s order as placed? This will save it by date and lock editing.")) return;
+ }
+ const date=new Date().toISOString().slice(0,10);
+ const hist=getJSON(key("order_history"),[]).filter(x=>x.date!==date);
+ hist.unshift({id:date+"-"+Date.now(),date,placedAt:new Date().toISOString(),status:"Placed",backStock:back,finalOrder:final});
+ setJSON(key("order_history"),hist.slice(0,100));
+ setStatus("Placed");
+ document.body.classList.add("order-locked");
+ toast("Order placed and saved");
+}
+ready(function(){
+ const dashBtn=document.getElementById("dashMarkPlacedBtn");
+ if(dashBtn) dashBtn.onclick=snapshotOrderV29;
+ const quickBtn=document.getElementById("ordersQuickMarkPlacedBtn");
+ if(quickBtn) quickBtn.onclick=snapshotOrderV29;
+ const oldBtn=document.getElementById("markOrderPlacedBtn");
+ if(oldBtn) oldBtn.onclick=snapshotOrderV29;
+
+ function updatePlacedButtons(){
+   const placed=status()==="Placed";
+   [dashBtn,quickBtn,oldBtn].filter(Boolean).forEach(b=>{
+     b.disabled=placed;
+     if(b===dashBtn){
+       b.querySelector("small").textContent=placed ? "Already placed" : "Lock today’s order";
+       b.querySelector(".dash-circle").textContent=placed ? "🔒" : "✅";
+     } else {
+       b.textContent=placed ? "Placed" : "Mark Placed";
+     }
+   });
+ }
+ updatePlacedButtons();
+ setInterval(updatePlacedButtons,1000);
+});
+})();
+
+
+/* v30 order lock + sticky headers + workflow back buttons */
+(function(){
+function ready(f){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",f,{once:true}):f()}
+function status(){return localStorage.getItem(key("order_status"))||"Draft"}
+function isPlaced(){return status()==="Placed"}
+function goOrders(){ if(typeof switchView==="function") switchView("orders"); }
+
+function applyOrderLockV30(){
+  const locked=isPlaced();
+  document.body.classList.toggle("order-locked",locked);
+  document.querySelectorAll("#orderView input,#orderView .qty-step,#orderView .danger,#orderView .remove-order,#frontStockView input,#frontStockView .qty-step,#frontStockView .remove-front,#frontStockView .danger,#frontStockView #frontScanBtn").forEach(el=>{
+    el.disabled=locked;
+    el.setAttribute("aria-disabled",String(locked));
+  });
+  ["backToOrdersFromStockBtn","backToOrdersFromFinalBtn","backToBackStockBtn","exportOrderBtn","exportFrontStockBtn","exportCombinedStockBtn"].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.disabled=false;el.removeAttribute("aria-disabled")}
+  });
+}
+
+function addBackButtons(){
+  const stockHead=document.querySelector("#orderView .section-head h2");
+  if(stockHead && !document.getElementById("backToOrdersFromStockBtn")){
+    const b=document.createElement("button");
+    b.id="backToOrdersFromStockBtn";
+    b.type="button";
+    b.className="header-back-btn";
+    b.innerHTML="←";
+    b.setAttribute("aria-label","Back to Orders");
+    b.onclick=goOrders;
+    stockHead.insertBefore(b, stockHead.firstChild);
+  }
+  const finalHead=document.querySelector("#frontStockView .section-head h2");
+  if(finalHead && !document.getElementById("backToOrdersFromFinalBtn")){
+    const b=document.createElement("button");
+    b.id="backToOrdersFromFinalBtn";
+    b.type="button";
+    b.className="header-back-btn";
+    b.innerHTML="←";
+    b.setAttribute("aria-label","Back to Orders");
+    b.onclick=goOrders;
+    finalHead.insertBefore(b, finalHead.firstChild);
+  }
+}
+
+function blockPlacedEdits(){
+  document.addEventListener("click",function(e){
+    if(!isPlaced()) return;
+    const blocked=e.target.closest("#orderView .qty-step,#orderView .danger,#orderView .remove-order,#frontStockView .qty-step,#frontStockView .remove-front,#frontStockView .danger,#frontStockView #frontScanBtn");
+    if(blocked){
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      toast("Order is placed and locked");
+    }
+  },true);
+  document.addEventListener("input",function(e){
+    if(!isPlaced()) return;
+    if(e.target.closest("#orderView,#frontStockView")){
+      e.preventDefault(); e.stopPropagation();
+      toast("Order is placed and locked");
+    }
+  },true);
+}
+
+ready(function(){
+  addBackButtons();
+  applyOrderLockV30();
+  blockPlacedEdits();
+  ["dashMarkPlacedBtn","ordersQuickMarkPlacedBtn","markOrderPlacedBtn","unlockOrderBtn"].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.addEventListener("click",()=>setTimeout(()=>{applyOrderLockV30();addBackButtons();},150),true);
+  });
+  document.addEventListener("click",()=>setTimeout(()=>{addBackButtons();applyOrderLockV30();},200));
+  setTimeout(()=>{addBackButtons();applyOrderLockV30();},400);
+  setTimeout(()=>{addBackButtons();applyOrderLockV30();},1200);
+});
+window.applyOrderLockV30=applyOrderLockV30;
+})();
+
+
+/* v31 navbar height variable fix */
+(function(){
+  function setNavbarHeight(){
+    const header = document.querySelector("header");
+    const h = header ? Math.ceil(header.getBoundingClientRect().height) : 58;
+    document.documentElement.style.setProperty("--navbar-height", h + "px");
+    document.documentElement.style.setProperty("--header-h", h + "px");
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", setNavbarHeight, {once:true});
+  } else {
+    setNavbarHeight();
+  }
+
+  window.addEventListener("resize", setNavbarHeight);
+  window.addEventListener("orientationchange", () => setTimeout(setNavbarHeight, 250));
+  setTimeout(setNavbarHeight, 300);
+})();
+
+
+/* v32 fixed page header layout */
+(function(){
+  function activeSectionHead(){
+    const active = document.querySelector(".view.active") || Array.from(document.querySelectorAll(".view")).find(v => getComputedStyle(v).display !== "none");
+    return active?.querySelector(":scope > .section-head, :scope > .panel.section-head") || null;
+  }
+
+  function setLayoutVars(){
+    const nav = document.querySelector("header");
+    const section = activeSectionHead();
+
+    const navH = nav ? Math.ceil(nav.getBoundingClientRect().height) : 58;
+    const sectionH = section ? Math.ceil(section.getBoundingClientRect().height) : 42;
+
+    document.documentElement.style.setProperty("--navbar-height", navH + "px");
+    document.documentElement.style.setProperty("--page-header-height", sectionH + "px");
+    document.documentElement.style.setProperty("--fixed-top-total", (navH + sectionH) + "px");
+  }
+
+  function refresh(){
+    requestAnimationFrame(setLayoutVars);
+    setTimeout(setLayoutVars, 120);
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", refresh, {once:true});
+  } else {
+    refresh();
+  }
+
+  window.addEventListener("resize", refresh);
+  window.addEventListener("orientationchange", () => setTimeout(refresh, 250));
+
+  document.addEventListener("click", () => setTimeout(refresh, 120), true);
+
+  const main = document.querySelector("main");
+  if(main){
+    const obs = new MutationObserver(refresh);
+    obs.observe(main, {attributes:true, childList:true, subtree:true, attributeFilter:["class", "style", "hidden"]});
+  }
+})();
+
+
+/* v34 force lookup header layout refresh */
+(function(){
+  function refreshLookupHeaderLayout(){
+    const header = document.querySelector("header");
+    const active = document.querySelector(".view.active") || document.querySelector("#lookupView");
+    const section = active?.querySelector(":scope > .section-head, :scope > .panel.section-head");
+    const navH = header ? Math.ceil(header.getBoundingClientRect().height) : 58;
+    const sectionH = section ? Math.ceil(section.getBoundingClientRect().height) : 42;
+    document.documentElement.style.setProperty("--navbar-height", navH + "px");
+    document.documentElement.style.setProperty("--page-header-height", sectionH + "px");
+    document.documentElement.style.setProperty("--fixed-top-total", (navH + sectionH) + "px");
+    if(window.refreshProduceAssistantUI) window.refreshProduceAssistantUI();
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", () => setTimeout(refreshLookupHeaderLayout, 100), {once:true});
+  } else {
+    setTimeout(refreshLookupHeaderLayout, 100);
+  }
+
+  document.addEventListener("click", () => setTimeout(refreshLookupHeaderLayout, 150), true);
+  window.addEventListener("resize", refreshLookupHeaderLayout);
+})();
+
+
+/* v35 lookup panel layout refresh */
+(function(){
+  function refreshLayout(){
+    const nav = document.querySelector("header");
+    const active = document.querySelector(".view.active") || document.querySelector("#lookupView");
+    const section = active?.querySelector(":scope > .section-head, :scope > .panel.section-head");
+    const navH = nav ? Math.ceil(nav.getBoundingClientRect().height) : 58;
+    const sectionH = section ? Math.ceil(section.getBoundingClientRect().height) : 42;
+    document.documentElement.style.setProperty("--navbar-height", navH + "px");
+    document.documentElement.style.setProperty("--page-header-height", sectionH + "px");
+    document.documentElement.style.setProperty("--fixed-top-total", (navH + sectionH) + "px");
+  }
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", () => setTimeout(refreshLayout, 100), {once:true});
+  } else {
+    setTimeout(refreshLayout, 100);
+  }
+  window.addEventListener("resize", refreshLayout);
+})();
+
+
+/* v36 lookup title without breaking lookup panel */
+(function(){
+  function setVars(){
+    const header = document.querySelector("header");
+    const navH = header ? Math.ceil(header.getBoundingClientRect().height) : 58;
+    document.documentElement.style.setProperty("--navbar-height", navH + "px");
+  }
+
+  function updateLookupTitle(){
+    setVars();
+    const title = document.getElementById("lookupFixedHeader");
+    if(!title) return;
+    const active = document.querySelector(".view.active");
+    title.hidden = !(active && active.id === "lookupView");
+  }
+
+  function showLookupInfo(){
+    const msg = "Search, scan, and quickly add items to Back Stock or Favorites.";
+    if(typeof toast === "function") toast(msg);
+    else alert(msg);
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", () => {
+      updateLookupTitle();
+      document.getElementById("lookupInfoBtn")?.addEventListener("click", showLookupInfo);
+    }, {once:true});
+  } else {
+    updateLookupTitle();
+    document.getElementById("lookupInfoBtn")?.addEventListener("click", showLookupInfo);
+  }
+
+  document.addEventListener("click", () => setTimeout(updateLookupTitle, 80), true);
+  window.addEventListener("resize", updateLookupTitle);
+  setTimeout(updateLookupTitle, 300);
+})();
+
+
+/* v37 dynamic bottom spacing */
+(function(){
+  function setBottomNavHeight(){
+    const tabs = document.querySelector(".tabs");
+    const h = tabs ? Math.ceil(tabs.getBoundingClientRect().height) : 58;
+    document.documentElement.style.setProperty("--bottom-nav-height", h + "px");
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", setBottomNavHeight, {once:true});
+  } else {
+    setBottomNavHeight();
+  }
+
+  window.addEventListener("resize", setBottomNavHeight);
+  window.addEventListener("orientationchange", () => setTimeout(setBottomNavHeight, 250));
+  setTimeout(setBottomNavHeight, 300);
+})();
