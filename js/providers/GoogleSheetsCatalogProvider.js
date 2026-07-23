@@ -8,6 +8,7 @@
       this.storageVersionKey = options.storageVersionKey || "myProduceAssistant.catalogVersion";
       this.storageUpdatedAtKey = options.storageUpdatedAtKey || "myProduceAssistant.catalogUpdatedAt";
       this.storeId = options.storeId || "";
+      this.timeoutMs = Number(options.timeoutMs) || 30000;
     }
 
     isConfigured() {
@@ -40,6 +41,41 @@
       localStorage.removeItem(this.storageUpdatedAtKey);
     }
 
+    requestJsonp(url) {
+      return new Promise((resolve, reject) => {
+        const callbackName = `googleSheetsCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const script = document.createElement("script");
+        let settled = false;
+
+        const cleanup = () => {
+          global.clearTimeout(timeoutId);
+          script.remove();
+          try { delete global[callbackName]; } catch (_) { global[callbackName] = undefined; }
+        };
+
+        const finish = (handler, value) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          handler(value);
+        };
+
+        const timeoutId = global.setTimeout(() => {
+          finish(reject, new Error("Google Sheets request timed out."));
+        }, this.timeoutMs);
+
+        global[callbackName] = result => finish(resolve, result);
+        script.onerror = () => finish(reject, new Error("Unable to load Google Sheets data."));
+
+        const requestUrl = new URL(url);
+        requestUrl.searchParams.set("callback", callbackName);
+        requestUrl.searchParams.set("_", String(Date.now()));
+        script.src = requestUrl.toString();
+        script.async = true;
+        document.head.appendChild(script);
+      });
+    }
+
     async sync() {
       if (!this.isConfigured()) {
         throw new Error("Google Apps Script URL is not configured in js/AppConfig.js.");
@@ -50,17 +86,7 @@
       if (version) url.searchParams.set("version", version);
       if (this.storeId) url.searchParams.set("storeId", this.storeId);
 
-      const response = await fetch(url.toString(), {
-        method: "GET",
-        cache: "no-store",
-        redirect: "follow"
-      });
-
-      if (!response.ok) {
-        throw new Error(`Google catalog request failed with status ${response.status}.`);
-      }
-
-      const result = await response.json();
+      const result = await this.requestJsonp(url.toString());
       if (!result || result.success !== true) {
         throw new Error(result?.message || "Google catalog returned an invalid response.");
       }

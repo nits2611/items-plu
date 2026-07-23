@@ -122,7 +122,7 @@
         const productCodes = codesByProduct.get(productId) || [];
         const categoryRow = categoryById.get(String(product.category_id || ""));
         const aliasText = (aliasesByProduct.get(productId) || []).join(" ");
-        const itemName = String(storeProduct?.local_name || product.product_name || "").trim();
+        const itemName = String(product.product_name || "").trim();
         const quantity = [product.size, product.unit].filter(Boolean).join(" ").trim();
 
         productCodes.forEach(codeRow => {
