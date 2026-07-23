@@ -549,7 +549,7 @@ body.tools-open{
     border-radius:50%;
     align-items:center;
     justify-content:center;
-    z-index:90;
+    z-index:200;
     background:#087763;
     color:#fff;
     border:2px solid #fff;
@@ -1528,5 +1528,116 @@ body.mobile-bottom-ui #lookupView{
 @media(min-width:641px){
   main{
     padding-bottom:24px!important;
+  }
+}
+
+/* v39 desktop navigation placement fix */
+@media (min-width:641px){
+  .tabs{
+    position:fixed!important;
+    top:var(--fixed-top-total,102px)!important;
+    left:0!important;
+    right:0!important;
+    z-index:175!important;
+    min-height:48px!important;
+    box-shadow:0 2px 7px #00000014!important;
+  }
+
+  main{
+    padding-top:calc(var(--fixed-top-total,102px) + 56px)!important;
+  }
+}
+
+/* v40 desktop hierarchy: app header -> navigation tabs -> active page header */
+:root{
+  --desktop-tabs-height:48px;
+}
+
+@media (min-width:641px){
+  /* Global app header stays at the top. */
+  header{
+    z-index:220!important;
+  }
+
+  /* Tabs are the primary navigation, directly below the app header. */
+  .tabs{
+    position:fixed!important;
+    top:var(--navbar-height,58px)!important;
+    left:0!important;
+    right:0!important;
+    z-index:205!important;
+    min-height:var(--desktop-tabs-height,48px)!important;
+    height:var(--desktop-tabs-height,48px)!important;
+    box-shadow:0 2px 7px #00000014!important;
+  }
+
+  /* Every page-specific header belongs below the tabs. */
+  .view > .section-head,
+  .view > .panel.section-head,
+  .fixed-page-title{
+    top:calc(var(--navbar-height,58px) + var(--desktop-tabs-height,48px))!important;
+    z-index:190!important;
+  }
+
+  /* Reserve space for all three layers so content never sits underneath them. */
+  main{
+    padding-top:calc(var(--fixed-top-total,148px) + 8px)!important;
+  }
+}
+
+
+/* v42 desktop sticky simplification
+   Desktop hierarchy: app header -> tabs -> page title/content.
+   Only the app header and tabs are sticky. Page headers scroll normally. */
+@media (min-width:641px){
+  header{
+    position:sticky!important;
+    top:0!important;
+    left:auto!important;
+    right:auto!important;
+    z-index:220!important;
+  }
+
+  .tabs{
+    position:sticky!important;
+    top:var(--navbar-height,64px)!important;
+    left:auto!important;
+    right:auto!important;
+    z-index:205!important;
+    height:auto!important;
+    min-height:48px!important;
+  }
+
+  .fixed-page-title,
+  .view > .section-head,
+  .view > .panel.section-head{
+    position:static!important;
+    top:auto!important;
+    left:auto!important;
+    right:auto!important;
+    width:auto!important;
+    z-index:auto!important;
+    margin:0!important;
+    border-radius:0!important;
+    box-shadow:0 2px 7px #00000018!important;
+  }
+
+  .fixed-page-title{
+    min-height:38px!important;
+    padding:8px 12px!important;
+  }
+
+  .view > .section-head,
+  .view > .panel.section-head{
+    margin-bottom:8px!important;
+    padding:8px 12px!important;
+  }
+
+  main{
+    padding-top:10px!important;
+  }
+
+  .view{
+    scroll-margin-top:calc(var(--navbar-height,64px) + 48px)!important;
   }
 }

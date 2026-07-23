@@ -2,14 +2,57 @@ const SAVE_ON_BASE="https://www.saveonfoods.com/sm/planning/rsid/1982/results?q=
 let items=[],filter="all",deferredPrompt=null,scannerStream=null,scannerTimer=null;
 const q=document.getElementById("q"),results=document.getElementById("results"),msg=document.getElementById("message"),count=document.getElementById("count"),syncStatus=document.getElementById("syncStatus");
 const CODE128=["212222","222122","222221","121223","121322","131222","122213","122312","132212","221213","221312","231212","112232","122132","122231","113222","123122","123221","223211","221132","221231","213212","223112","312131","311222","321122","321221","312212","322112","322211","212123","212321","232121","111323","131123","131321","112313","132113","132311","211313","231113","231311","112133","112331","132131","113123","113321","133121","313121","211331","231131","213113","213311","213131","311123","311321","331121","312113","312311","332111","314111","221411","431111","111224","111422","121124","121421","141122","141221","112214","112412","122114","122411","142112","142211","241211","221114","413111","241112","134111","111242","121142","121241","114212","124112","124211","411212","421112","421211","212141","214121","412121","111143","111341","131141","114113","114311","411113","411311","113141","114131","311141","411131","211412","211214","211232","2331112"];
-function parseCSV(t){let rows=[],row=[],val="",inQ=false;for(let i=0;i<t.length;i++){const ch=t[i],nx=t[i+1];if(ch=='"'&&inQ&&nx=='"'){val+='"';i++;continue}if(ch=='"'){inQ=!inQ;continue}if(ch==","&&!inQ){row.push(val);val="";continue}if((ch=="\n"||ch=="\r")&&!inQ){if(val||row.length){row.push(val);rows.push(row);row=[];val=""}if(ch=="\r"&&nx=="\n")i++;continue}val+=ch}if(val||row.length)rows.push([...row,val]);if(!rows.length)return[];const h=rows.shift().map(x=>x.trim());return rows.filter(r=>r.some(v=>String(v).trim())).map(r=>{const o={};h.forEach((k,i)=>o[k]=(r[i]||"").trim());return o})}
-async function sha256Short(text){if(!crypto?.subtle){let h=0;for(let i=0;i<text.length;i++)h=((h<<5)-h+text.charCodeAt(i))|0;return String(h)}const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(text));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("").slice(0,12)}
-function detectBrand(n){const b=["Earthbound Farm","Taylor Farms","Fresh Express","GoodLeaf Farms","Goodleaf Farms","Western Family","Save-On-Foods"];const u=String(n).toUpperCase();return b.find(x=>u.startsWith(x.toUpperCase()))||""}
-function normalize(r){const item_name=r.item_name||r.label||r.display_name||r.clean_name||"",code=String(r.code||r.PLU||r.plu||r.item_number||"").trim(),quantity=r.quantity||"",brand=r.brand||detectBrand(item_name),category=r.category||"",type=r.type||(code.length>6?"packaged":"produce"),image_local=r.image_local||r.image||"",image_url=r.image_url||"",notes=r.notes||"",aliases=r.aliases||"",search_keywords=r.search_keywords||[item_name,code,quantity,brand,category,type,notes,aliases].join(" ");return{item_name,code,quantity,brand,category,type,image_local,image_url,notes,aliases,hay:search_keywords.toLowerCase()}}
-const rowsToItems=rows=>rows.map(normalize).filter(x=>x.item_name&&x.code);
-function setItemsFromCSV(text){items=rowsToItems(parseCSV(text));renderAll()}
-async function loadInitialData(){const cached=localStorage.getItem(STORAGE_CSV);if(cached){setItemsFromCSV(cached);setSync("Loaded cached data. Checking updates...")}else if(window.DEFAULT_ITEMS?.length){items=rowsToItems(window.DEFAULT_ITEMS);renderAll();setSync("Loaded bundled data. Checking CSV...")}await checkForCSVUpdate()}
-async function checkForCSVUpdate(){try{const res=await fetch(CSV_URL,{cache:"no-cache"});if(!res.ok)throw Error(res.status);const text=await res.text(),hash=await sha256Short(text),old=localStorage.getItem(STORAGE_HASH);if(!old||old!==hash){localStorage.setItem(STORAGE_CSV,text);localStorage.setItem(STORAGE_HASH,hash);setItemsFromCSV(text);setSync(`Data updated (${items.length} items).`)}else setSync(`Data up to date (${items.length} items).`)}catch(e){setSync(`Offline/cached mode (${items.length} items).`,"warn")}}
+
+const localCatalogProvider=new LocalCatalogProvider({
+  csvUrl:CSV_URL,
+  storageCsvKey:STORAGE_CSV,
+  storageHashKey:STORAGE_HASH,
+  bundledItems:window.DEFAULT_ITEMS||[]
+});
+const cloudCatalogProvider=new GoogleSheetsCatalogProvider({
+  apiUrl:window.AppConfig?.googleSheets?.apiUrl||"",
+  storageCatalogKey:window.AppConfig?.catalog?.cacheKey,
+  storageVersionKey:window.AppConfig?.catalog?.cacheVersionKey,
+  storageUpdatedAtKey:window.AppConfig?.catalog?.cacheUpdatedAtKey,
+  storeId:window.AppConfig?.catalog?.storeId
+});
+const catalogService=new CatalogService(localCatalogProvider,cloudCatalogProvider);
+
+// Compatibility wrappers keep the existing UI code unchanged while all catalog
+// parsing, normalization, caching, and update logic lives in the service layer.
+const parseCSV=text=>catalogService.parseCsv(text);
+const sha256Short=text=>catalogService.hashText(text);
+const detectBrand=name=>catalogService.detectBrand(name);
+const normalize=row=>catalogService.normalizeRow(row);
+const rowsToItems=rows=>catalogService.rowsToItems(rows);
+function setItemsFromCSV(text){items=catalogService.csvToItems(text);renderAll()}
+async function loadInitialData(){
+  try{
+    const initial=await catalogService.loadInitialCatalog();
+    items=initial.items;
+    renderAll();
+    setSync(initial.source==="cloud-cache"?"Loaded cached cloud catalog. Checking updates...":initial.source==="csv-cache"?"Loaded cached CSV. Checking updates...":"Loaded bundled data. Checking updates...");
+  }catch(error){
+    items=[];
+    renderAll();
+    setSync("Unable to load catalog data.","warn");
+  }
+  await checkForCSVUpdate();
+}
+async function checkForCSVUpdate(){
+  try{
+    const update=await catalogService.checkForUpdate();
+    if(update.changed){
+      items=update.items;
+      renderAll();
+      setSync(`${update.source==="google-sheets"?"Cloud catalog":"Data"} updated (${items.length} items).`);
+    }else{
+      setSync(`Data up to date (${items.length} items).`);
+    }
+  }catch(error){
+    setSync(`Offline/cached mode (${items.length} items).`,"warn");
+  }
+}
 function getJSON(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}}function setJSON(k,v){localStorage.setItem(k,JSON.stringify(v))}
 const key=n=>`plu_${STORE}_${n}`;const favs=()=>getJSON(key("favorites"),[]);const recents=()=>getJSON(key("recent"),[]);const order=()=>getJSON(key("order"),[]);
 function isFav(code){return favs().includes(code)}function touch(code){let r=recents().filter(x=>x!==code);r.unshift(code);setJSON(key("recent"),r.slice(0,30))}
@@ -260,8 +303,8 @@ function initAdvancedToggle(){const btn=document.getElementById("advancedToggle"
   } else {
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5H21L14 13V19L10 21V13L3 5Z"/></svg>`;
   }localStorage.setItem("plu_advanced_open",open?"1":"0")}set(localStorage.getItem("plu_advanced_open")==="1");btn.onclick=e=>{e.preventDefault();set(controls.hidden)}}
-document.getElementById("csvUpload")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const text=await f.text(),hash=await sha256Short(text);localStorage.setItem(STORAGE_CSV,text);localStorage.setItem(STORAGE_HASH,hash);setItemsFromCSV(text);setSync(`Uploaded CSV loaded (${items.length} items).`)});
-document.getElementById("resetBtn").onclick=()=>{localStorage.removeItem(STORAGE_CSV);localStorage.removeItem(STORAGE_HASH);items=rowsToItems(window.DEFAULT_ITEMS||[]);renderAll();checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear back stock?")){setJSON(key("order"),[]);renderOrder()}};
+document.getElementById("csvUpload")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;try{const imported=await catalogService.importCsv(await f.text());items=imported.items;renderAll();setSync(`Uploaded CSV loaded (${items.length} items).`)}catch(error){setSync("Unable to import CSV.","warn")}});
+document.getElementById("resetBtn").onclick=()=>{items=catalogService.reset();renderAll();checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear back stock?")){setJSON(key("order"),[]);renderOrder()}};
 document.getElementById("exportOrderBtn").onclick=()=>downloadCSV("back-stock.csv",["item_name,code,quantity",...order().map(o=>`"${(o.item_name||"").replaceAll('"','""')}",${o.code},"${String(o.qty).replaceAll('"','""')}"`)].join("\n"));document.getElementById("exportProfileBtn").onclick=()=>{const data={favorites:favs(),recent:recents(),order:order(),exportedAt:new Date().toISOString()};downloadFile("plu-profile.json",JSON.stringify(data,null,2),"application/json")};document.getElementById("importProfile")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(data.favorites)setJSON(key("favorites"),data.favorites);if(data.recent)setJSON(key("recent"),data.recent);if(data.order)setJSON(key("order"),data.order);renderAll()});
 function downloadCSV(n,t){downloadFile(n,t,"text/csv")}function downloadFile(n,t,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type}));a.download=n;a.click();URL.revokeObjectURL(a.href)}
 async function startScanner(){if(!("BarcodeDetector" in window)){alert("Camera barcode scanner is not supported in this browser. Try Android Chrome. Bluetooth scanner can still type into search.");return}const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),status=document.getElementById("scannerStatus");modal.hidden=false;status.textContent="Opening camera...";try{scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});video.srcObject=scannerStream;await video.play();const detector=new BarcodeDetector({formats:["code_128","ean_13","upc_a","upc_e","ean_8"]});status.textContent="Point camera at barcode.";scannerTimer=setInterval(async()=>{try{const codes=await detector.detect(video);if(codes.length){const val=codes[0].rawValue;stopScanner();q.value=val;touch(val);switchView("lookup");renderLookup();if(!getResults().length){renderNotFound(val)}}}catch{}},500)}catch(e){status.textContent="Camera unavailable. Check permission/HTTPS."}}
@@ -1888,11 +1931,8 @@ window.applyOrderLockV30=applyOrderLockV30;
 
   document.addEventListener("click", () => setTimeout(refresh, 120), true);
 
-  const main = document.querySelector("main");
-  if(main){
-    const obs = new MutationObserver(refresh);
-    obs.observe(main, {attributes:true, childList:true, subtree:true, attributeFilter:["class", "style", "hidden"]});
-  }
+  // Do not observe the entire page subtree here. Product/order rendering changes the DOM
+  // frequently and caused repeated layout recalculation and visible scroll jumping.
 })();
 
 
@@ -1997,4 +2037,116 @@ window.applyOrderLockV30=applyOrderLockV30;
   window.addEventListener("resize", setBottomNavHeight);
   window.addEventListener("orientationchange", () => setTimeout(setBottomNavHeight, 250));
   setTimeout(setBottomNavHeight, 300);
+})();
+
+/* v40 desktop hierarchy measurement */
+(function(){
+  function getActivePageHeader(){
+    const active = document.querySelector('.view.active');
+    if(!active) return null;
+
+    if(active.id === 'lookupView'){
+      const lookupTitle = document.getElementById('lookupFixedHeader');
+      if(lookupTitle && !lookupTitle.hidden) return lookupTitle;
+    }
+
+    return active.querySelector(':scope > .section-head, :scope > .panel.section-head');
+  }
+
+  function updateDesktopHierarchy(){
+    const appHeader = document.querySelector('header');
+    const tabs = document.querySelector('.tabs');
+    const pageHeader = getActivePageHeader();
+
+    const appHeaderHeight = appHeader ? Math.ceil(appHeader.getBoundingClientRect().height) : 58;
+    const tabsHeight = tabs ? Math.ceil(tabs.getBoundingClientRect().height) : 48;
+    const pageHeaderHeight = pageHeader ? Math.ceil(pageHeader.getBoundingClientRect().height) : 42;
+
+    document.documentElement.style.setProperty('--navbar-height', appHeaderHeight + 'px');
+    document.documentElement.style.setProperty('--desktop-tabs-height', tabsHeight + 'px');
+    document.documentElement.style.setProperty('--page-header-height', pageHeaderHeight + 'px');
+
+    const isDesktop = window.matchMedia('(min-width: 641px)').matches;
+    const fixedTopTotal = isDesktop
+      ? appHeaderHeight + tabsHeight + pageHeaderHeight
+      : appHeaderHeight + pageHeaderHeight;
+
+    document.documentElement.style.setProperty('--fixed-top-total', fixedTopTotal + 'px');
+  }
+
+  function refresh(){
+    requestAnimationFrame(updateDesktopHierarchy);
+    setTimeout(updateDesktopHierarchy, 100);
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', refresh, {once:true});
+  } else {
+    refresh();
+  }
+
+  window.addEventListener('resize', refresh);
+  window.addEventListener('orientationchange', () => setTimeout(refresh, 250));
+  document.addEventListener('click', () => setTimeout(refresh, 100), true);
+
+  // Avoid a subtree MutationObserver. The app updates buttons and result content often;
+  // observing those updates created a measurement loop that made the page scroll/jump.
+})();
+
+
+/* v41 stable header measurement without DOM observer loops */
+(function(){
+  let scheduled = false;
+
+  function measure(){
+    scheduled = false;
+    const appHeader = document.querySelector('header');
+    const tabs = document.querySelector('.tabs');
+    const active = document.querySelector('.view.active');
+    let pageHeader = null;
+
+    if(active?.id === 'lookupView') {
+      const lookup = document.getElementById('lookupFixedHeader');
+      if(lookup && !lookup.hidden) pageHeader = lookup;
+    }
+    if(!pageHeader && active){
+      pageHeader = active.querySelector(':scope > .section-head, :scope > .panel.section-head');
+    }
+
+    const navH = Math.ceil(appHeader?.getBoundingClientRect().height || 58);
+    const tabsH = Math.ceil(tabs?.getBoundingClientRect().height || 48);
+    const pageH = Math.ceil(pageHeader?.getBoundingClientRect().height || 42);
+    const desktop = window.matchMedia('(min-width: 641px)').matches;
+    const total = desktop ? navH + tabsH + pageH : navH + pageH;
+
+    const root = document.documentElement;
+    const values = {
+      '--navbar-height': navH + 'px',
+      '--desktop-tabs-height': tabsH + 'px',
+      '--page-header-height': pageH + 'px',
+      '--fixed-top-total': total + 'px'
+    };
+
+    for(const [name, value] of Object.entries(values)){
+      if(root.style.getPropertyValue(name) !== value){
+        root.style.setProperty(name, value);
+      }
+    }
+  }
+
+  function schedule(){
+    if(scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(measure);
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', schedule, {once:true});
+  } else {
+    schedule();
+  }
+
+  document.querySelector('.tabs')?.addEventListener('click', () => setTimeout(schedule, 0));
+  window.addEventListener('resize', schedule);
+  window.addEventListener('orientationchange', () => setTimeout(schedule, 200));
 })();

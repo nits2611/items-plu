@@ -35,11 +35,6 @@
     <button id="installBtn" hidden>Install</button>
   </div></header>
 
-<div id="lookupFixedHeader" class="fixed-page-title lookup-fixed-title" hidden>
-  <strong>Lookup</strong>
-  <button id="lookupInfoBtn" type="button" aria-label="Lookup info">i</button>
-</div>
-
 <div id="drawerBackdrop" class="drawer-backdrop" hidden></div>
 <aside id="appDrawer" class="app-drawer" aria-hidden="true">
   <div class="drawer-head"><div><strong>🌿 My Produce Assistant</strong><small>Mobile-first produce workflow</small></div><button id="closeDrawerBtn" type="button">✕</button></div>
@@ -76,6 +71,11 @@
 </div>
 
 <nav class="tabs"><button class="tab active" data-view="lookup"><span class="tab-icon">🔍</span><span class="tab-text">Lookup</span></button><button class="tab" data-view="favorites"><span class="tab-icon">★</span><span class="tab-text">Fav</span></button><button class="tab" data-view="recent"><span class="tab-icon">🕒</span><span class="tab-text">Recent</span></button><button class="tab" data-view="order"><span class="tab-icon">📦</span><span class="tab-text">Back</span></button></nav>
+<div id="lookupFixedHeader" class="fixed-page-title lookup-fixed-title" hidden>
+  <strong>Lookup</strong>
+  <button id="lookupInfoBtn" type="button" aria-label="Lookup info">i</button>
+</div>
+
 <main>
 <section id="lookupView" class="view active">
 <section class="panel"><button id="closeSearchDrawerBtn" class="close-search-drawer" type="button" aria-label="Close search">✕</button>
@@ -280,4 +280,4 @@
   </div>
 </div>
 
-<footer>Data source: <code>items.csv</code>. Replace CSV on GitHub to sync updates.</footer><script src="data.js"></script><script src="app.js"></script></body></html>
+<footer>Data source: Google Sheets when configured, with local cache and bundled CSV fallback.</footer><script src="data.js"></script><script src="js/AppConfig.js"></script><script src="js/providers/LocalCatalogProvider.js"></script><script src="js/providers/GoogleSheetsCatalogProvider.js"></script><script src="js/services/CatalogService.js"></script><script src="app.js"></script></body></html>
