@@ -50,6 +50,7 @@ async function checkForCSVUpdate(){
       setSync(`Data up to date (${items.length} items).`);
     }
   }catch(error){
+    console.error("[Catalog sync] Update failed:", error);
     setSync(`Offline/cached mode (${items.length} items).`,"warn");
   }
 }

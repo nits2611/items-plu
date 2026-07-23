@@ -43,6 +43,7 @@
 
     requestJsonp(url) {
       return new Promise((resolve, reject) => {
+        console.info("[Catalog sync] Starting JSONP request:", url);
         const callbackName = `googleSheetsCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
         const script = document.createElement("script");
         let settled = false;
@@ -64,8 +65,19 @@
           finish(reject, new Error("Google Sheets request timed out."));
         }, this.timeoutMs);
 
-        global[callbackName] = result => finish(resolve, result);
-        script.onerror = () => finish(reject, new Error("Unable to load Google Sheets data."));
+        global[callbackName] = result => {
+          console.info("[Catalog sync] JSONP callback received.", {
+            success: result?.success,
+            updated: result?.updated,
+            catalogVersion: result?.catalogVersion,
+            productCount: result?.data?.products?.length
+          });
+          finish(resolve, result);
+        };
+        script.onerror = event => {
+          console.error("[Catalog sync] JSONP script failed to load.", event);
+          finish(reject, new Error("Unable to load Google Sheets data."));
+        };
 
         const requestUrl = new URL(url);
         requestUrl.searchParams.set("callback", callbackName);
@@ -86,7 +98,19 @@
       if (version) url.searchParams.set("version", version);
       if (this.storeId) url.searchParams.set("storeId", this.storeId);
 
-      const result = await this.requestJsonp(url.toString());
+      let result = await this.requestJsonp(url.toString());
+
+      // If a version remains in storage but the catalog payload was removed,
+      // the server may correctly answer "updated: false" while the app has
+      // nothing usable to display. Retry once without a version in that case.
+      if (result?.updated === false && !this.getCachedCatalog()) {
+        console.warn("[Catalog sync] Version exists without catalog cache; forcing a full download.");
+        const retryUrl = new URL(this.apiUrl);
+        if (this.storeId) retryUrl.searchParams.set("storeId", this.storeId);
+        retryUrl.searchParams.set("force", "1");
+        result = await this.requestJsonp(retryUrl.toString());
+      }
+
       if (!result || result.success !== true) {
         throw new Error(result?.message || "Google catalog returned an invalid response.");
       }
@@ -101,6 +125,12 @@
       }
 
       this.saveCatalog(result.data, catalogVersion);
+      console.info("[Catalog sync] Catalog cache updated.", {
+        catalogVersion,
+        products: result.data.products.length,
+        productCodes: result.data.productCodes?.length || 0,
+        productAliases: result.data.productAliases?.length || 0
+      });
       return { changed: true, version: catalogVersion, catalog: result.data };
     }
   }

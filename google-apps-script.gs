@@ -17,7 +17,9 @@ function doGet(event) {
     const appSettings = readSheet_(spreadsheet, CATALOG_SHEETS.appSettings);
     const catalogVersion = String(getSetting_(appSettings, "catalog_version"));
 
-    if (clientVersion && clientVersion === catalogVersion) {
+    const forceRefresh = String(event?.parameter?.force || "") === "1";
+
+    if (!forceRefresh && clientVersion && clientVersion === catalogVersion) {
       return createResponse_({
         success: true,
         catalogVersion,
