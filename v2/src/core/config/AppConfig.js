@@ -1,13 +1,13 @@
 (function (global) {
   "use strict";
 
-  // v46: single source of truth for application-wide configuration.
+  // v47: single source of truth for application-wide configuration.
   // Keep values here instead of duplicating URLs, cache keys, or timeouts
   // throughout feature code.
   global.AppConfig = Object.freeze({
     app: Object.freeze({
       name: "My Produce Assistant",
-      version: "46"
+      version: "47"
     }),
 
     urls: Object.freeze({

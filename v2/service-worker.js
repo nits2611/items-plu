@@ -1,4 +1,4 @@
-const CACHE="my-produce-assistant-v46-core-infrastructure";
+const CACHE="my-produce-assistant-v47-1-router-heading-fix";
 const SHELL=[
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const SHELL=[
   "./src/core/config/AppConfig.js",
   "./src/core/http/HttpClient.js",
   "./src/core/storage/LocalStorageClient.js",
+  "./src/core/router/Router.js",
   "./src/core/utils/UrlUtils.js",
   "./src/core/logging/Logger.js",
   "./data/versions.json",

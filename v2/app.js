@@ -298,7 +298,29 @@ function card(x) {
 function placeholder(){const d=document.createElement("div");d.className="thumb placeholder";d.textContent="No image";return d}
 function code128SVG(v){v=String(v).trim();const numeric=/^\d+$/.test(v)&&v.length%2===0;let codes=[],sum;if(numeric){codes.push(105);sum=105;for(let i=0;i<v.length;i+=2){const c=Number(v.slice(i,i+2));codes.push(c);sum+=c*(codes.length-1)}}else{codes.push(104);sum=104;for(let i=0;i<v.length;i++){const c=v.charCodeAt(i)-32;codes.push(c);sum+=c*(codes.length-1)}}codes.push(sum%103,106);const mod=numeric&&v.length>6?2.05:2.3,h=58;let x=10,parts=[];for(const c of codes){const p=CODE128[c];if(!p)continue;for(let i=0;i<p.length;i++){const w=Number(p[i])*mod;if(i%2===0)parts.push(`<rect x="${x.toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${h}"/>`);x+=w}}x+=10;const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("viewBox",`0 0 ${Math.ceil(x)} ${h+18}`);svg.innerHTML=`<g fill="#000">${parts.join("")}</g><text x="${Math.ceil(x/2)}" y="${h+14}" text-anchor="middle" font-size="13" font-family="Arial" font-weight="700">${v}</text>`;return svg}
 function show(t){msg.hidden=false;msg.textContent=t}function hide(){msg.hidden=true;msg.textContent=""}function setSync(t,l=""){syncStatus.textContent=t;syncStatus.className="sync-status "+l}
-function switchView(v){document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.getElementById(v+"View").classList.add("active");renderAll()}
+function activateView(v){
+  const target=document.getElementById(v+"View");
+  if(!target){console.warn(`[View] Unknown view: ${v}`);return false}
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
+  document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
+  target.classList.add("active");
+
+  // Keep route-driven navigation (including browser Back/Forward) in sync
+  // with the fixed Lookup heading. Previously this was refreshed mainly by
+  // click handlers, so hashchange navigation could leave the old heading visible.
+  const lookupHeader=document.getElementById("lookupFixedHeader");
+  if(lookupHeader) lookupHeader.hidden=(v!=="lookup");
+
+  renderAll();
+  window.dispatchEvent(new Event("app:viewchange"));
+  return true
+}
+function switchView(v,options={}){
+  if(window.AppRouter&&!options.fromRouter){
+    return window.AppRouter.navigate(v)
+  }
+  return activateView(v)
+}
 q.addEventListener("input",renderLookup);document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>switchView(t.dataset.view));document.querySelectorAll(".filters button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".filters button").forEach(x=>x.classList.remove("active"));b.classList.add("active");filter=b.dataset.filter;renderLookup()});
 function initAdvancedToggle(){const btn=document.getElementById("advancedToggle"),controls=document.getElementById("advancedControls");if(!btn||!controls)return;function set(open){controls.hidden=!open;btn.setAttribute("aria-expanded",String(open));if (open) {
     btn.textContent = "✕";
@@ -2151,4 +2173,17 @@ window.applyOrderLockV30=applyOrderLockV30;
   document.querySelector('.tabs')?.addEventListener('click', () => setTimeout(schedule, 0));
   window.addEventListener('resize', schedule);
   window.addEventListener('orientationchange', () => setTimeout(schedule, 200));
+})();
+
+
+/* v47 SPA router bootstrap: route changes now activate the existing stable views. */
+(function initSpaRouter(){
+  if(!window.AppRouter) return;
+  window.AppRouter.setHandler((view)=>switchView(view,{fromRouter:true}));
+  window.AppRouter.start("lookup");
+  window.addEventListener("app:viewchange", () => {
+    const lookupHeader = document.getElementById("lookupFixedHeader");
+    const active = document.querySelector(".view.active");
+    if (lookupHeader) lookupHeader.hidden = !(active && active.id === "lookupView");
+  });
 })();
