@@ -1,3 +1,34 @@
+# Changelog
+
+## v48.1 - Lookup info tooltip consistency fix
+
+Goal: make the fixed Lookup header information button use the same tooltip presentation and positioning as the information buttons on the other app pages.
+
+Changes:
+- Lookup info now uses the shared `.section-info-tooltip` UI instead of a toast/alert.
+- The fixed Lookup info button now uses the common `.section-info-btn` styling.
+- Exposed the existing tooltip presenter as a small shared UI helper so fixed headers can reuse it without duplicating tooltip logic.
+- Service-worker cache bumped to v48.1.
+
+No intended changes to product lookup, routing, scanner, orders, favorites, recent, storage, or catalog behavior.
+
+## v48 - Product/Lookup module migration
+
+Goal: move Product domain responsibilities behind modular Controller, Service, Repository, View, and Provider boundaries without changing existing UI behavior or storage technology.
+
+Changes:
+- Added `src/modules/products/ProductController.js`.
+- Added `src/modules/products/ProductService.js` for product state, search, classification, and code lookup.
+- Added `src/modules/products/ProductRepository.js` as the product data-access boundary.
+- Added `src/modules/products/ProductView.js` as a compatibility UI adapter.
+- Added `src/modules/products/providers/LegacyCatalogProductProvider.js` to bridge the new module to the proven CatalogService stack.
+- Catalog loading, update checks, CSV import/reset, and core lookup filtering now flow through the Product module.
+- Existing seasonal/archive extensions continue to work but now delegate product searching to ProductService.
+- No IndexedDB migration, UI redesign, route changes, or feature additions in this release.
+- Service-worker cache bumped to v48.
+
+Regression target: behavior should remain identical to v47.1.
+
 ## v47.1 - Router heading sync fix
 
 Goal:

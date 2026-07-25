@@ -1,4 +1,4 @@
-const CACHE="my-produce-assistant-v47-1-router-heading-fix";
+const CACHE="my-produce-assistant-v48.1-lookup-tooltip-fix";
 const SHELL=[
   "./",
   "./index.html",
@@ -17,6 +17,11 @@ const SHELL=[
   "./js/providers/LocalCatalogProvider.js",
   "./js/providers/GoogleSheetsCatalogProvider.js",
   "./js/services/CatalogService.js",
+  "./src/modules/products/providers/LegacyCatalogProductProvider.js",
+  "./src/modules/products/ProductRepository.js",
+  "./src/modules/products/ProductService.js",
+  "./src/modules/products/ProductView.js",
+  "./src/modules/products/ProductController.js",
   "./manifest.webmanifest",
   "./items.csv",
   "./icons/icon-192.png",

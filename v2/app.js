@@ -19,42 +19,33 @@ const cloudCatalogProvider=new GoogleSheetsCatalogProvider({
 });
 const catalogService=new CatalogService(localCatalogProvider,cloudCatalogProvider);
 
-// Compatibility wrappers keep the existing UI code unchanged while all catalog
-// parsing, normalization, caching, and update logic lives in the service layer.
+// v48 Product module. The adapter keeps the proven CatalogService stack in
+// place while the rest of the application now talks through product-domain
+// boundaries that can later move to IndexedDB/API providers independently.
+const legacyProductProvider=new LegacyCatalogProductProvider(catalogService);
+const productRepository=new ProductRepository(legacyProductProvider);
+const productService=new ProductService(productRepository);
+const productView=new ProductView({
+  renderAll:()=>renderAll(),
+  setSync:(message,level)=>setSync(message,level)
+});
+const productController=new ProductController({
+  service:productService,
+  view:productView,
+  onItemsChanged:next=>{items=next;}
+});
+window.ProductModule=Object.freeze({controller:productController,service:productService,repository:productRepository});
+
+// Compatibility wrappers preserve existing extension code while catalog parsing
+// helpers remain in CatalogService during this migration phase.
 const parseCSV=text=>catalogService.parseCsv(text);
 const sha256Short=text=>catalogService.hashText(text);
 const detectBrand=name=>catalogService.detectBrand(name);
 const normalize=row=>catalogService.normalizeRow(row);
 const rowsToItems=rows=>catalogService.rowsToItems(rows);
-function setItemsFromCSV(text){items=catalogService.csvToItems(text);renderAll()}
-async function loadInitialData(){
-  try{
-    const initial=await catalogService.loadInitialCatalog();
-    items=initial.items;
-    renderAll();
-    setSync(initial.source==="cloud-cache"?"Loaded cached cloud catalog. Checking updates...":initial.source==="csv-cache"?"Loaded cached CSV. Checking updates...":"Loaded bundled data. Checking updates...");
-  }catch(error){
-    items=[];
-    renderAll();
-    setSync("Unable to load catalog data.","warn");
-  }
-  await checkForCSVUpdate();
-}
-async function checkForCSVUpdate(){
-  try{
-    const update=await catalogService.checkForUpdate();
-    if(update.changed){
-      items=update.items;
-      renderAll();
-      setSync(`${update.source==="google-sheets"?"Cloud catalog":"Data"} updated (${items.length} items).`);
-    }else{
-      setSync(`Data up to date (${items.length} items).`);
-    }
-  }catch(error){
-    console.error("[Catalog sync] Update failed:", error);
-    setSync(`Offline/cached mode (${items.length} items).`,"warn");
-  }
-}
+function setItemsFromCSV(text){productController.setItemsFromCsv(text)}
+async function loadInitialData(){return productController.loadInitialData()}
+async function checkForCSVUpdate(){return productController.checkForUpdate()}
 function getJSON(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}}function setJSON(k,v){localStorage.setItem(k,JSON.stringify(v))}
 const key=n=>`plu_${STORE}_${n}`;const favs=()=>getJSON(key("favorites"),[]);const recents=()=>getJSON(key("recent"),[]);const order=()=>getJSON(key("order"),[]);
 function isFav(code){return favs().includes(code)}function touch(code){let r=recents().filter(x=>x!==code);r.unshift(code);setJSON(key("recent"),r.slice(0,30))}
@@ -135,9 +126,9 @@ function saveOnSearchUrl(term) {
   return SAVE_ON_BASE + encodeURIComponent(String(term || "").trim());
 }
 
-function isOrg(x){return /(^ORG\b|ORGANIC)/i.test(x.item_name)}function isPackaged(x){return x.code.length>6||/packaged|upc/i.test(x.type)}
-function getResults(){let a=items,terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);if(filter==="produce")a=a.filter(x=>!isPackaged(x));if(filter==="packaged")a=a.filter(isPackaged);if(filter==="organic")a=a.filter(isOrg);if(terms.length)a=a.filter(x=>terms.every(t=>x.hay.includes(t)||x.item_name.toLowerCase().includes(t)||x.code.toLowerCase().includes(t)));return a.slice(0,100)}
-function byCodes(codes){return codes.map(c=>items.find(x=>x.code===c)).filter(Boolean)}
+function isOrg(x){return productService.isOrganic(x)}function isPackaged(x){return productService.isPackaged(x)}
+function getResults(){return productService.search({query:q.value,filter,limit:100})}
+function byCodes(codes){return productService.byCodes(codes)}
 function renderAll(){renderLookup();renderFavorites();renderRecent();renderOrder();renderMissing()}
 
 function renderNotFound(term) {
@@ -327,8 +318,8 @@ function initAdvancedToggle(){const btn=document.getElementById("advancedToggle"
   } else {
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5H21L14 13V19L10 21V13L3 5Z"/></svg>`;
   }localStorage.setItem("plu_advanced_open",open?"1":"0")}set(localStorage.getItem("plu_advanced_open")==="1");btn.onclick=e=>{e.preventDefault();set(controls.hidden)}}
-document.getElementById("csvUpload")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;try{const imported=await catalogService.importCsv(await f.text());items=imported.items;renderAll();setSync(`Uploaded CSV loaded (${items.length} items).`)}catch(error){setSync("Unable to import CSV.","warn")}});
-document.getElementById("resetBtn").onclick=()=>{items=catalogService.reset();renderAll();checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear back stock?")){setJSON(key("order"),[]);renderOrder()}};
+document.getElementById("csvUpload")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;try{await productController.importCsv(await f.text());setSync(`Uploaded CSV loaded (${items.length} items).`)}catch(error){setSync("Unable to import CSV.","warn")}});
+document.getElementById("resetBtn").onclick=()=>{productController.reset();checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear back stock?")){setJSON(key("order"),[]);renderOrder()}};
 document.getElementById("exportOrderBtn").onclick=()=>downloadCSV("back-stock.csv",["item_name,code,quantity",...order().map(o=>`"${(o.item_name||"").replaceAll('"','""')}",${o.code},"${String(o.qty).replaceAll('"','""')}"`)].join("\n"));document.getElementById("exportProfileBtn").onclick=()=>{const data={favorites:favs(),recent:recents(),order:order(),exportedAt:new Date().toISOString()};downloadFile("plu-profile.json",JSON.stringify(data,null,2),"application/json")};document.getElementById("importProfile")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(data.favorites)setJSON(key("favorites"),data.favorites);if(data.recent)setJSON(key("recent"),data.recent);if(data.order)setJSON(key("order"),data.order);renderAll()});
 function downloadCSV(n,t){downloadFile(n,t,"text/csv")}function downloadFile(n,t,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type}));a.download=n;a.click();URL.revokeObjectURL(a.href)}
 async function startScanner(){if(!("BarcodeDetector" in window)){alert("Camera barcode scanner is not supported in this browser. Try Android Chrome. Bluetooth scanner can still type into search.");return}const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),status=document.getElementById("scannerStatus");modal.hidden=false;status.textContent="Opening camera...";try{scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});video.srcObject=scannerStream;await video.play();const detector=new BarcodeDetector({formats:["code_128","ean_13","upc_a","upc_e","ean_8"]});status.textContent="Point camera at barcode.";scannerTimer=setInterval(async()=>{try{const codes=await detector.detect(video);if(codes.length){const val=codes[0].rawValue;stopScanner();q.value=val;touch(val);switchView("lookup");renderLookup();if(!getResults().length){renderNotFound(val)}}}catch{}},500)}catch(e){status.textContent="Camera unavailable. Check permission/HTTPS."}}
@@ -816,7 +807,7 @@ function isSeasonalItem(x){return truthy(x?.is_seasonal)||!!String(x?.season||""
 const oldNormalize=normalize;
 window.normalize=function(row){const x=oldNormalize(row);x.organic=row.organic||x.organic||(/(^ORG\b|ORGANIC)/i.test(x.item_name)?"Organic":"Conventional");x.is_archived=row.is_archived||row.archived||"";x.is_seasonal=row.is_seasonal||row.seasonal||"";x.season=row.season||"";x.festival=row.festival||"";return x};
 
-window.getResults=function(){let a=(items||[]).filter(x=>!isArchivedItem(x));const terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);if(filter==="produce")a=a.filter(x=>!isPackaged(x));if(filter==="packaged")a=a.filter(isPackaged);if(filter==="organic")a=a.filter(isOrg);if(filter==="seasonal")a=a.filter(isSeasonalItem);if(terms.length)a=a.filter(x=>terms.every(t=>x.hay.includes(t)||x.item_name.toLowerCase().includes(t)||x.code.toLowerCase().includes(t)||String(x.season||"").toLowerCase().includes(t)||String(x.festival||"").toLowerCase().includes(t)));return a.slice(0,100)};
+window.getResults=function(){return productService.search({query:q.value,filter,limit:100,isArchived:isArchivedItem,isSeasonal:isSeasonalItem,includeArchived:false})};
 
 window.archiveCatalogItem=function(code){const a=archivedCodes();if(!a.includes(String(code)))a.unshift(String(code));setArchivedCodes(a);renderAll();toast("Item archived")};
 window.restoreCatalogItem=function(code){setArchivedCodes(archivedCodes().filter(x=>x!==String(code)));renderAll();toast("Item restored")};
@@ -1512,6 +1503,9 @@ renderAll();
     tip.style.left=left+"px"; tip.style.top=Math.max(pad,top)+"px";
   }
 
+  // Shared by fixed-page headers (such as Lookup) so every info button uses the same tooltip UI.
+  window.showSectionInfoTooltip = showTip;
+
   function setupHeader(head){
     const h2=head?.querySelector("h2"), p=head?.querySelector("p"), actions=head?.querySelector(".order-actions");
     if(!h2) return;
@@ -2022,8 +2016,15 @@ window.applyOrderLockV30=applyOrderLockV30;
     title.hidden = !(active && active.id === "lookupView");
   }
 
-  function showLookupInfo(){
+  function showLookupInfo(event){
+    event?.preventDefault();
+    event?.stopPropagation();
+    const button = document.getElementById("lookupInfoBtn");
     const msg = "Search, scan, and quickly add items to Back Stock or Favorites.";
+    if(button && typeof window.showSectionInfoTooltip === "function") {
+      window.showSectionInfoTooltip(msg, button);
+      return;
+    }
     if(typeof toast === "function") toast(msg);
     else alert(msg);
   }
