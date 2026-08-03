@@ -12,7 +12,7 @@
     }
 
     isConfigured() {
-      return Boolean(this.apiUrl && /^https:\/\//i.test(this.apiUrl));
+      return /^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?|$)/i.test(this.apiUrl);
     }
 
     getCachedCatalog() {
@@ -25,9 +25,7 @@
       }
     }
 
-    getCachedVersion() {
-      return localStorage.getItem(this.storageVersionKey) || "";
-    }
+    getCachedVersion() { return localStorage.getItem(this.storageVersionKey) || ""; }
 
     saveCatalog(catalog, version) {
       localStorage.setItem(this.storageCatalogKey, JSON.stringify(catalog));
@@ -43,7 +41,6 @@
 
     requestJsonp(url) {
       return new Promise((resolve, reject) => {
-        console.info("[Catalog sync] Starting JSONP request:", url);
         const callbackName = `googleSheetsCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
         const script = document.createElement("script");
         let settled = false;
@@ -53,31 +50,16 @@
           script.remove();
           try { delete global[callbackName]; } catch (_) { global[callbackName] = undefined; }
         };
-
         const finish = (handler, value) => {
           if (settled) return;
           settled = true;
           cleanup();
           handler(value);
         };
+        const timeoutId = global.setTimeout(() => finish(reject, new Error("Google catalog request timed out.")), this.timeoutMs);
 
-        const timeoutId = global.setTimeout(() => {
-          finish(reject, new Error("Google Sheets request timed out."));
-        }, this.timeoutMs);
-
-        global[callbackName] = result => {
-          console.info("[Catalog sync] JSONP callback received.", {
-            success: result?.success,
-            updated: result?.updated,
-            catalogVersion: result?.catalogVersion,
-            productCount: result?.data?.products?.length
-          });
-          finish(resolve, result);
-        };
-        script.onerror = event => {
-          console.error("[Catalog sync] JSONP script failed to load.", event);
-          finish(reject, new Error("Unable to load Google Sheets data."));
-        };
+        global[callbackName] = result => finish(resolve, result);
+        script.onerror = () => finish(reject, new Error("Unable to load the Google catalog endpoint."));
 
         const requestUrl = new URL(url);
         requestUrl.searchParams.set("callback", callbackName);
@@ -88,51 +70,49 @@
       });
     }
 
-    async sync() {
+    normalizeCatalog(data) {
+      return {
+        products: data?.products,
+        productCodes: data?.productCodes ?? data?.product_codes,
+        productAliases: data?.productAliases ?? data?.product_aliases,
+        categories: data?.categories,
+        storeProducts: data?.storeProducts ?? data?.store_products,
+        appSettings: data?.appSettings ?? data?.app_settings ?? []
+      };
+    }
+
+    async downloadCatalog({ force = true } = {}) {
       if (!this.isConfigured()) {
-        throw new Error("Google Apps Script URL is not configured in js/AppConfig.js.");
+        throw new Error("Set the deployed Google Apps Script /exec URL in src/core/config/AppConfig.js.");
       }
 
       const url = new URL(this.apiUrl);
-      const version = this.getCachedVersion();
-      if (version) url.searchParams.set("version", version);
-      if (this.storeId) url.searchParams.set("storeId", this.storeId);
-
-      let result = await this.requestJsonp(url.toString());
-
-      // If a version remains in storage but the catalog payload was removed,
-      // the server may correctly answer "updated: false" while the app has
-      // nothing usable to display. Retry once without a version in that case.
-      if (result?.updated === false && !this.getCachedCatalog()) {
-        console.warn("[Catalog sync] Version exists without catalog cache; forcing a full download.");
-        const retryUrl = new URL(this.apiUrl);
-        if (this.storeId) retryUrl.searchParams.set("storeId", this.storeId);
-        retryUrl.searchParams.set("force", "1");
-        result = await this.requestJsonp(retryUrl.toString());
+      url.searchParams.set("action", "products");
+      if (this.storeId) {
+        url.searchParams.set("store_id", this.storeId);
+        url.searchParams.set("storeId", this.storeId);
       }
+      if (force) url.searchParams.set("force", "1");
 
+      const result = await this.requestJsonp(url.toString());
       if (!result || result.success !== true) {
         throw new Error(result?.message || "Google catalog returned an invalid response.");
       }
 
-      const catalogVersion = String(result.catalogVersion ?? "");
-      if (result.updated === false) {
-        return { changed: false, version: catalogVersion, catalog: null };
-      }
+      const catalog = this.normalizeCatalog(result.data);
+      const version = String(result.version ?? result.catalogVersion ?? "").trim();
+      if (!version) throw new Error("Google catalog response is missing its version.");
 
-      if (!result.data || !Array.isArray(result.data.products)) {
-        throw new Error("Google catalog response is missing required data.");
-      }
+      const required = ["products", "productCodes", "productAliases", "categories", "storeProducts"];
+      const missing = required.filter(key => !Array.isArray(catalog[key]));
+      if (missing.length) throw new Error(`Google catalog response is missing: ${missing.join(", ")}.`);
 
-      this.saveCatalog(result.data, catalogVersion);
-      console.info("[Catalog sync] Catalog cache updated.", {
-        catalogVersion,
-        products: result.data.products.length,
-        productCodes: result.data.productCodes?.length || 0,
-        productAliases: result.data.productAliases?.length || 0
-      });
-      return { changed: true, version: catalogVersion, catalog: result.data };
+      return { changed: true, version, catalog };
     }
+
+    // Compatibility alias for older code. v50 uses downloadCatalog only when
+    // the user clicks Update Catalog.
+    sync() { return this.downloadCatalog({ force: true }); }
   }
 
   global.GoogleSheetsCatalogProvider = GoogleSheetsCatalogProvider;

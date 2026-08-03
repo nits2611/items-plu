@@ -23,18 +23,37 @@ const catalogService=new CatalogService(localCatalogProvider,cloudCatalogProvide
 // place while the rest of the application now talks through product-domain
 // boundaries that can later move to IndexedDB/API providers independently.
 const legacyProductProvider=new LegacyCatalogProductProvider(catalogService);
-const productRepository=new ProductRepository(legacyProductProvider);
+const productDbClient=new IndexedDbClient({
+  databaseName:window.AppConfig?.storage?.databaseName||"my-produce-assistant",
+  databaseVersion:window.AppConfig?.storage?.databaseVersion||1,
+  stores:[{name:"products",options:{keyPath:"id"}}]
+});
+const catalogVersionProvider=new StaticCatalogVersionProvider({
+  url:window.AppConfig?.urls?.versions||"./data/versions.json",
+  httpClient:HttpClient,
+  timeoutMs:10000
+});
+const indexedDbProductProvider=new IndexedDbProductProvider({
+  primaryProvider:legacyProductProvider,
+  dbClient:productDbClient,
+  versionProvider:catalogVersionProvider,
+  storeName:"products",
+  versionStorageKey:window.AppConfig?.catalog?.releaseVersionKey||"myProduceAssistant.productCatalogReleaseVersion",
+  bundledVersion:window.AppConfig?.catalog?.bundledVersion||"1.0.0"
+});
+const productRepository=new ProductRepository(indexedDbProductProvider);
 const productService=new ProductService(productRepository);
 const productView=new ProductView({
   renderAll:()=>renderAll(),
-  setSync:(message,level)=>setSync(message,level)
+  setSync:(message,level)=>setSync(message,level),
+  renderCatalogUpdate:state=>renderCatalogUpdate(state)
 });
 const productController=new ProductController({
   service:productService,
   view:productView,
   onItemsChanged:next=>{items=next;}
 });
-window.ProductModule=Object.freeze({controller:productController,service:productService,repository:productRepository});
+window.ProductModule=Object.freeze({controller:productController,service:productService,repository:productRepository,storage:indexedDbProductProvider});
 
 // Compatibility wrappers preserve existing extension code while catalog parsing
 // helpers remain in CatalogService during this migration phase.
@@ -289,6 +308,32 @@ function card(x) {
 function placeholder(){const d=document.createElement("div");d.className="thumb placeholder";d.textContent="No image";return d}
 function code128SVG(v){v=String(v).trim();const numeric=/^\d+$/.test(v)&&v.length%2===0;let codes=[],sum;if(numeric){codes.push(105);sum=105;for(let i=0;i<v.length;i+=2){const c=Number(v.slice(i,i+2));codes.push(c);sum+=c*(codes.length-1)}}else{codes.push(104);sum=104;for(let i=0;i<v.length;i++){const c=v.charCodeAt(i)-32;codes.push(c);sum+=c*(codes.length-1)}}codes.push(sum%103,106);const mod=numeric&&v.length>6?2.05:2.3,h=58;let x=10,parts=[];for(const c of codes){const p=CODE128[c];if(!p)continue;for(let i=0;i<p.length;i++){const w=Number(p[i])*mod;if(i%2===0)parts.push(`<rect x="${x.toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${h}"/>`);x+=w}}x+=10;const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("viewBox",`0 0 ${Math.ceil(x)} ${h+18}`);svg.innerHTML=`<g fill="#000">${parts.join("")}</g><text x="${Math.ceil(x/2)}" y="${h+14}" text-anchor="middle" font-size="13" font-family="Arial" font-weight="700">${v}</text>`;return svg}
 function show(t){msg.hidden=false;msg.textContent=t}function hide(){msg.hidden=true;msg.textContent=""}function setSync(t,l=""){syncStatus.textContent=t;syncStatus.className="sync-status "+l}
+function renderCatalogUpdate(state={}){
+  const card=document.getElementById("catalogUpdateCard");
+  const message=document.getElementById("catalogUpdateMessage");
+  const localVersion=document.getElementById("localCatalogVersion");
+  const remoteVersion=document.getElementById("remoteCatalogVersion");
+  const updatedDate=document.getElementById("catalogUpdateDate");
+  const updateButton=document.getElementById("updateCatalogBtn");
+  const checkButton=document.getElementById("checkCatalogUpdateBtn");
+  if(!card||!message)return;
+  const status=state.status||"checking";
+  card.dataset.status=status;
+  message.textContent=state.message||"Checking for catalog updates...";
+  if(localVersion)localVersion.textContent=state.localVersion||productService?.getLocalVersion?.()||"—";
+  if(remoteVersion)remoteVersion.textContent=state.remoteVersion||"—";
+  if(updatedDate){
+    if(state.remoteUpdatedAt){
+      const parsed=new Date(state.remoteUpdatedAt);
+      updatedDate.textContent=Number.isNaN(parsed.getTime())?`Published: ${state.remoteUpdatedAt}`:`Published: ${parsed.toLocaleString()}`;
+    }else updatedDate.textContent="";
+  }
+  if(updateButton){
+    updateButton.hidden=status!=="available";
+    updateButton.disabled=status==="downloading";
+  }
+  if(checkButton)checkButton.disabled=status==="checking"||status==="downloading";
+}
 function activateView(v){
   const target=document.getElementById(v+"View");
   if(!target){console.warn(`[View] Unknown view: ${v}`);return false}
@@ -318,8 +363,44 @@ function initAdvancedToggle(){const btn=document.getElementById("advancedToggle"
   } else {
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5H21L14 13V19L10 21V13L3 5Z"/></svg>`;
   }localStorage.setItem("plu_advanced_open",open?"1":"0")}set(localStorage.getItem("plu_advanced_open")==="1");btn.onclick=e=>{e.preventDefault();set(controls.hidden)}}
-document.getElementById("csvUpload")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;try{await productController.importCsv(await f.text());setSync(`Uploaded CSV loaded (${items.length} items).`)}catch(error){setSync("Unable to import CSV.","warn")}});
-document.getElementById("resetBtn").onclick=()=>{productController.reset();checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear back stock?")){setJSON(key("order"),[]);renderOrder()}};
+async function importCatalogCsv(file, mode){
+  if(!file)return;
+  try{
+    const result=await productController.importCsv(await file.text(),{mode});
+    const stats=result?.stats||{};
+    if(mode==="merge"){
+      setSync(`CSV merged: ${stats.added||0} added, ${stats.updated||0} updated, ${stats.skipped||0} skipped. Total ${items.length}.`);
+    }else{
+      setSync(`Local catalog replaced (${items.length} items).`);
+    }
+  }catch(error){
+    console.error("[Catalog import]",error);
+    setSync(error?.message||"Unable to import CSV.","warn");
+  }
+}
+
+document.getElementById("csvMergeUpload")?.addEventListener("change",async e=>{
+  const file=e.target.files[0];
+  await importCatalogCsv(file,"merge");
+  e.target.value="";
+});
+
+document.getElementById("csvReplaceUpload")?.addEventListener("change",async e=>{
+  const file=e.target.files[0];
+  if(file&&confirm("Replace this device's entire local store catalog with the selected CSV? Existing items not present in the file will be removed. This cannot affect another store or the shared master catalog.")){
+    await importCatalogCsv(file,"replace");
+  }
+  e.target.value="";
+});
+document.getElementById("checkCatalogUpdateBtn")?.addEventListener("click",async()=>{
+  renderCatalogUpdate({status:"checking",localVersion:productService.getLocalVersion(),message:"Checking for a newer catalog version..."});
+  await productController.checkForUpdate();
+});
+document.getElementById("updateCatalogBtn")?.addEventListener("click",async()=>{
+  if(!confirm("Download and install the available product catalog update on this device? Your existing local catalog will be preserved if the update fails."))return;
+  try{await productController.applyAvailableUpdate()}catch(_){/* UI already reports the error. */}
+});
+document.getElementById("resetBtn").onclick=async()=>{await productController.reset();await checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear back stock?")){setJSON(key("order"),[]);renderOrder()}};
 document.getElementById("exportOrderBtn").onclick=()=>downloadCSV("back-stock.csv",["item_name,code,quantity",...order().map(o=>`"${(o.item_name||"").replaceAll('"','""')}",${o.code},"${String(o.qty).replaceAll('"','""')}"`)].join("\n"));document.getElementById("exportProfileBtn").onclick=()=>{const data={favorites:favs(),recent:recents(),order:order(),exportedAt:new Date().toISOString()};downloadFile("plu-profile.json",JSON.stringify(data,null,2),"application/json")};document.getElementById("importProfile")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(data.favorites)setJSON(key("favorites"),data.favorites);if(data.recent)setJSON(key("recent"),data.recent);if(data.order)setJSON(key("order"),data.order);renderAll()});
 function downloadCSV(n,t){downloadFile(n,t,"text/csv")}function downloadFile(n,t,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type}));a.download=n;a.click();URL.revokeObjectURL(a.href)}
 async function startScanner(){if(!("BarcodeDetector" in window)){alert("Camera barcode scanner is not supported in this browser. Try Android Chrome. Bluetooth scanner can still type into search.");return}const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),status=document.getElementById("scannerStatus");modal.hidden=false;status.textContent="Opening camera...";try{scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});video.srcObject=scannerStream;await video.play();const detector=new BarcodeDetector({formats:["code_128","ean_13","upc_a","upc_e","ean_8"]});status.textContent="Point camera at barcode.";scannerTimer=setInterval(async()=>{try{const codes=await detector.detect(video);if(codes.length){const val=codes[0].rawValue;stopScanner();q.value=val;touch(val);switchView("lookup");renderLookup();if(!getResults().length){renderNotFound(val)}}}catch{}},500)}catch(e){status.textContent="Camera unavailable. Check permission/HTTPS."}}
@@ -363,6 +444,8 @@ if (importMissingCsv) {
         unit: row.unit || "",
         category: row.category || "",
         organic: row.organic || row.type_quality || row.organic_type || "",
+        image_url: row.image_url || row.imageUrl || "",
+        image_local: row.image_local || row.image || "",
         notes: row.notes || row.note || "",
         date: row.date || new Date().toISOString()
       };
@@ -443,6 +526,8 @@ initAdvancedToggle();loadInitialData();
     document.getElementById("missingQuantity").value = row?.quantity || "";
     document.getElementById("missingUnit").value = row?.unit || "";
     document.getElementById("missingCategory").value = row?.category || "";
+    document.getElementById("missingImageUrl").value = row?.image_url || "";
+    document.getElementById("missingImageLocal").value = row?.image_local || "";
     {
       const organicValue = row?.organic || "Conventional";
       document.querySelectorAll('input[name="missingOrganic"]').forEach(r => {
@@ -479,6 +564,8 @@ initAdvancedToggle();loadInitialData();
       unit: formData.unit,
       category: formData.category,
       organic: formData.organic,
+      image_url: formData.image_url,
+      image_local: formData.image_local,
       notes: formData.notes,
       date: formData.date || new Date().toISOString()
     };
@@ -580,6 +667,8 @@ initAdvancedToggle();loadInitialData();
         unit: document.getElementById("missingUnit").value.trim(),
         category: document.getElementById("missingCategory").value.trim(),
         organic: (document.querySelector('input[name="missingOrganic"]:checked')?.value || "Conventional").trim(),
+        image_url: document.getElementById("missingImageUrl").value.trim(),
+        image_local: document.getElementById("missingImageLocal").value.trim(),
         notes: document.getElementById("missingNotes").value.trim()
       });
     });
@@ -590,10 +679,10 @@ initAdvancedToggle();loadInitialData();
     exportBtn.onclick = () => {
       const list = (typeof missingItems === "function") ? missingItems() : safeGetJSON(storeKey("missing"), []);
       const rows = [
-        "term,item_name,brand,quantity,unit,category,organic,notes,date",
+        "term,item_name,brand,quantity,unit,category,organic,image_url,image_local,notes,date",
         ...list.map(x => [
           x.term || "", x.item_name || "", x.brand || "", x.quantity || "",
-          x.unit || "", x.category || "", x.organic || "", x.notes || "", x.date || ""
+          x.unit || "", x.category || "", x.organic || "", x.image_url || "", x.image_local || "", x.notes || "", x.date || ""
         ].map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
       ];
       if (typeof downloadCSV === "function") downloadCSV("missing-items.csv", rows.join("\n"));
@@ -665,8 +754,8 @@ initAdvancedToggle();loadInitialData();
       brand,
       category,
       type: String(code).length > 6 ? "packaged" : "produce",
-      image_local: "",
-      image_url: "",
+      image_local: row.image_local || "",
+      image_url: row.image_url || "",
       notes: row.notes || "",
       aliases,
       search_keywords: [itemName, code, quantityText, brand, category, organic, aliases].filter(Boolean).join(" ").toUpperCase(),
@@ -700,7 +789,7 @@ initAdvancedToggle();loadInitialData();
     const hash = (typeof sha256Short === "function") ? await sha256Short(updatedCSV) : String(Date.now());
     localStorage.setItem(STORAGE_CSV, updatedCSV);
     localStorage.setItem(STORAGE_HASH, hash);
-    setItemsFromCSV(updatedCSV);
+    await productController.importCsv(updatedCSV);
 
     // remove promoted items from missing list
     setJSON(key("missing"), allMissing.filter(x => !terms.includes(String(x.term))));
@@ -748,7 +837,9 @@ initAdvancedToggle();loadInitialData();
         row.term ? `Code/Search: ${row.term}` : ""
       ].filter(Boolean).join(" • ");
 
+      const missingImage = row.image_local || row.image_url || "";
       e.innerHTML = `
+        ${missingImage ? `<img class="missing-thumb" src="${String(missingImage).replaceAll('"','&quot;')}" alt="">` : ""}
         <div class="missing-row-head">
           <label class="missing-check"><input class="missing-select" type="checkbox" value=""> Select</label>
         </div>
@@ -1506,6 +1597,20 @@ renderAll();
   // Shared by fixed-page headers (such as Lookup) so every info button uses the same tooltip UI.
   window.showSectionInfoTooltip = showTip;
 
+  function setupReplaceCatalogInfo(){
+    const button=document.getElementById("replaceCatalogInfoBtn");
+    if(!button || button.dataset.tooltipReady==="1") return;
+    button.dataset.tooltipReady="1";
+    button.addEventListener("click",e=>{
+      e.preventDefault();
+      e.stopPropagation();
+      showTip(
+        "Replace Local Catalog affects only this device's local store catalog. It does not update the shared master catalog or any other store. Existing local products that are not in the uploaded CSV will be removed.",
+        button
+      );
+    });
+  }
+
   function setupHeader(head){
     const h2=head?.querySelector("h2"), p=head?.querySelector("p"), actions=head?.querySelector(".order-actions");
     if(!h2) return;
@@ -1552,7 +1657,7 @@ renderAll();
     });
   }
 
-  function apply(){setupHeaders(); stepper(); cards();}
+  function apply(){setupHeaders(); setupReplaceCatalogInfo(); stepper(); cards();}
   ready(()=>{
     apply();
     const targets=["results","favoritesResults","recentResults","archiveResults","missingResults","orderResults"].map(id=>document.getElementById(id)).filter(Boolean);
@@ -1677,7 +1782,8 @@ ready(function(){
  document.getElementById("drawerBtn")?.addEventListener("click",openDrawer);
  document.getElementById("closeDrawerBtn")?.addEventListener("click",closeDrawer);
  document.getElementById("drawerBackdrop")?.addEventListener("click",closeDrawer);
- document.querySelectorAll("[data-drawer-action]").forEach(btn=>btn.onclick=()=>{let a=btn.dataset.drawerAction;if(a==="dashboard")go("dashboard");else if(a==="orders"||a==="today-order")go("orders");else if(a==="inventory")go("inventory");else if(a==="missing")go("missing");else if(a==="archive")go("archive");else if(a==="data-tools")tools()});
+ document.querySelectorAll("[data-drawer-action]").forEach(btn=>btn.onclick=()=>{let a=btn.dataset.drawerAction;if(a==="dashboard")go("dashboard");else if(a==="orders"||a==="today-order")go("orders");else if(a==="inventory")go("inventory");else if(a==="missing")go("missing");else if(a==="archive")go("archive");else if(a==="data-tools")go("dataTools")});
+ document.getElementById("dataToolsBackBtn")?.addEventListener("click",()=>{if(window.history.length>1)window.history.back();else go("dashboard")});
  document.getElementById("dashGoOrderBtn")?.addEventListener("click",()=>go("orders"));
  document.getElementById("dashGoStockBtn")?.addEventListener("click",()=>go("order"));
  document.getElementById("dashGoFinalBtn")?.addEventListener("click",()=>go("frontStock"));

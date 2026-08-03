@@ -12,7 +12,8 @@
     frontStock: "/final-order",
     dashboard: "/dashboard",
     orders: "/orders",
-    inventory: "/inventory"
+    inventory: "/inventory",
+    dataTools: "/data-tools"
   });
 
   const routeToView = Object.freeze(

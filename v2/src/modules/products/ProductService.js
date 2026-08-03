@@ -1,7 +1,6 @@
 (function (global) {
   "use strict";
 
-  /** Product-domain state and search/filter rules. */
   class ProductService {
     constructor(repository) {
       if (!repository) throw new Error("ProductService requires ProductRepository.");
@@ -9,42 +8,16 @@
       this.items = [];
     }
 
-    setItems(items) {
-      this.items = Array.isArray(items) ? items : [];
-      return this.items;
-    }
+    setItems(items) { this.items = Array.isArray(items) ? items : []; return this.items; }
+    getItems() { return this.items; }
+    getLocalVersion() { return this.repository.getLocalVersion(); }
+    isOrganic(item) { return /(^ORG\b|ORGANIC)/i.test(String(item?.item_name || "")); }
+    isPackaged(item) { return String(item?.code || "").length > 6 || /packaged|upc/i.test(String(item?.type || "")); }
+    byCodes(codes) { return (Array.isArray(codes) ? codes : []).map(code => this.items.find(item => item.code === code)).filter(Boolean); }
 
-    getItems() {
-      return this.items;
-    }
-
-    isOrganic(item) {
-      return /(^ORG\b|ORGANIC)/i.test(String(item?.item_name || ""));
-    }
-
-    isPackaged(item) {
-      return String(item?.code || "").length > 6 || /packaged|upc/i.test(String(item?.type || ""));
-    }
-
-    byCodes(codes) {
-      const wanted = Array.isArray(codes) ? codes : [];
-      return wanted.map(code => this.items.find(item => item.code === code)).filter(Boolean);
-    }
-
-    search({
-      query = "",
-      filter = "all",
-      limit = 100,
-      isArchived = null,
-      isSeasonal = null,
-      includeArchived = true
-    } = {}) {
+    search({ query = "", filter = "all", limit = 100, isArchived = null, isSeasonal = null, includeArchived = true } = {}) {
       let found = this.items;
-
-      if (!includeArchived && typeof isArchived === "function") {
-        found = found.filter(item => !isArchived(item));
-      }
-
+      if (!includeArchived && typeof isArchived === "function") found = found.filter(item => !isArchived(item));
       if (filter === "produce") found = found.filter(item => !this.isPackaged(item));
       if (filter === "packaged") found = found.filter(item => this.isPackaged(item));
       if (filter === "organic") found = found.filter(item => this.isOrganic(item));
@@ -61,29 +34,15 @@
           return hay.includes(term) || name.includes(term) || code.includes(term) || season.includes(term) || festival.includes(term);
         }));
       }
-
       return found.slice(0, limit);
     }
 
-    loadInitialCatalog() {
-      return this.repository.loadInitialCatalog();
-    }
-
-    checkForUpdate() {
-      return this.repository.checkForUpdate();
-    }
-
-    importCsv(text) {
-      return this.repository.importCsv(text);
-    }
-
-    reset() {
-      return this.repository.reset();
-    }
-
-    csvToItems(text) {
-      return this.repository.csvToItems(text);
-    }
+    loadInitialCatalog() { return this.repository.loadInitialCatalog(); }
+    checkForUpdate() { return this.repository.checkForUpdate(); }
+    downloadUpdate(expectedVersion) { return this.repository.downloadUpdate(expectedVersion); }
+    importCsv(text, options = {}) { return this.repository.importCsv(text, options); }
+    reset() { return this.repository.reset(); }
+    csvToItems(text) { return this.repository.csvToItems(text); }
   }
 
   global.ProductService = ProductService;

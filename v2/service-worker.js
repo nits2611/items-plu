@@ -1,4 +1,4 @@
-const CACHE="my-produce-assistant-v48.1-lookup-tooltip-fix";
+const CACHE="my-produce-assistant-v50-manual-catalog-update";
 const SHELL=[
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const SHELL=[
   "./src/core/config/AppConfig.js",
   "./src/core/http/HttpClient.js",
   "./src/core/storage/LocalStorageClient.js",
+  "./src/core/storage/IndexedDbClient.js",
   "./src/core/router/Router.js",
   "./src/core/utils/UrlUtils.js",
   "./src/core/logging/Logger.js",
@@ -18,6 +19,8 @@ const SHELL=[
   "./js/providers/GoogleSheetsCatalogProvider.js",
   "./js/services/CatalogService.js",
   "./src/modules/products/providers/LegacyCatalogProductProvider.js",
+  "./src/modules/products/providers/StaticCatalogVersionProvider.js",
+  "./src/modules/products/providers/IndexedDbProductProvider.js",
   "./src/modules/products/ProductRepository.js",
   "./src/modules/products/ProductService.js",
   "./src/modules/products/ProductView.js",

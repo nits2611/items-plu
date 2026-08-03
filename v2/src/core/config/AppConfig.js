@@ -7,7 +7,7 @@
   global.AppConfig = Object.freeze({
     app: Object.freeze({
       name: "My Produce Assistant",
-      version: "47"
+      version: "50"
     }),
 
     urls: Object.freeze({
@@ -18,9 +18,9 @@
 
     api: Object.freeze({
       googleSheets: Object.freeze({
-        // Preserved from the stable baseline. Replace this value only when
-        // the deployed catalog endpoint changes.
-        apiUrl: "https://docs.google.com/spreadsheets/d/1gymt2fofTRKHkr9Xi8eLGG8_Ju2bYXxa6ur2y9vBPMo/edit?usp=sharing"
+        // Paste the deployed Google Apps Script web-app URL ending in /exec.
+        // Remote product data is requested only when the user clicks Update Catalog.
+        apiUrl: "https://script.google.com/macros/s/AKfycbyYxr7wYMWW6m2Z3xZg26Z3pMbuvVS-hKr1Wnfg9ozyH_rovqdDBLLyQl8317rg6lof/exec"
       })
     }),
 
@@ -33,8 +33,10 @@
       cacheKey: "myProduceAssistant.catalog",
       cacheVersionKey: "myProduceAssistant.catalogVersion",
       cacheUpdatedAtKey: "myProduceAssistant.catalogUpdatedAt",
+      releaseVersionKey: "myProduceAssistant.productCatalogReleaseVersion",
       legacyCsvKey: "plu_items_csv_current",
-      legacyCsvHashKey: "plu_items_csv_hash"
+      legacyCsvHashKey: "plu_items_csv_hash",
+      bundledVersion: "1.0.0"
     }),
 
     storage: Object.freeze({

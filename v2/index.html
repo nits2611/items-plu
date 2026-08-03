@@ -52,24 +52,6 @@
 </aside>
 
 
-<div id="topToolsPanel" class="top-tools-modal" hidden>
-  <div class="top-tools-backdrop"></div>
-  <div class="top-tools-card" role="dialog" aria-modal="true" aria-label="Data and Backup Tools">
-    <div class="top-tools-head">
-      <strong>Data & Backup Tools</strong>
-      <button id="closeTopToolsBtn" class="link" type="button">X</button>
-    </div>
-    <div class="top-tools-grid">
-      <span id="syncStatus" class="sync-status">Checking data...</span>
-      <label class="upload">Upload CSV <input id="csvUpload" type="file" accept=".csv,text/csv" hidden></label>
-      <button id="resetBtn" class="link" type="button">Reset data</button>
-      <button id="exportProfileBtn" class="link" type="button">Export Profile</button>
-      <button id="exportItemsBtn" class="link" type="button">Export Items CSV</button>
-      <label class="upload">Import Profile <input id="importProfile" type="file" accept=".json,application/json" hidden></label>
-    </div>
-  </div>
-</div>
-
 <nav class="tabs"><button class="tab active" data-view="lookup"><span class="tab-icon">🔍</span><span class="tab-text">Lookup</span></button><button class="tab" data-view="favorites"><span class="tab-icon">★</span><span class="tab-text">Fav</span></button><button class="tab" data-view="recent"><span class="tab-icon">🕒</span><span class="tab-text">Recent</span></button><button class="tab" data-view="order"><span class="tab-icon">📦</span><span class="tab-text">Back</span></button></nav>
 <div id="lookupFixedHeader" class="fixed-page-title lookup-fixed-title" hidden>
   <strong>Lookup</strong>
@@ -114,6 +96,102 @@
     </section>
     <section id="archiveResults" class="results"></section>
   </section>
+  <section id="dataToolsView" class="view data-tools-view">
+    <section class="panel section-head data-tools-page-head">
+      <div class="data-tools-title-row">
+        <button id="dataToolsBackBtn" class="page-back-btn" type="button" aria-label="Go back">←</button>
+        <div>
+          <h2>Data &amp; Backup</h2>
+          <p>Import, export, restore, and maintain the catalog stored on this device.</p>
+        </div>
+      </div>
+      <span id="syncStatus" class="sync-status data-tools-status">Ready</span>
+    </section>
+
+    <section class="data-tools-section catalog-update-section" aria-labelledby="catalogUpdateTitle">
+      <div class="data-tools-section-heading catalog-update-heading">
+        <div>
+          <h3 id="catalogUpdateTitle">Catalog Updates</h3>
+          <p>The app checks a small version file only. Product data downloads only after you choose Update Catalog.</p>
+        </div>
+        <button id="checkCatalogUpdateBtn" class="compact-secondary-button" type="button">Check again</button>
+      </div>
+      <div id="catalogUpdateCard" class="catalog-update-card" data-status="checking">
+        <div class="catalog-update-icon" aria-hidden="true">↻</div>
+        <div class="catalog-update-copy">
+          <strong id="catalogUpdateMessage">Checking for catalog updates...</strong>
+          <div class="catalog-version-row">
+            <span>Local: <b id="localCatalogVersion">—</b></span>
+            <span>Available: <b id="remoteCatalogVersion">—</b></span>
+          </div>
+          <small id="catalogUpdateDate"></small>
+        </div>
+        <button id="updateCatalogBtn" class="catalog-update-button" type="button" hidden>Update Catalog</button>
+      </div>
+    </section>
+
+    <section class="data-tools-section" aria-labelledby="catalogImportTitle">
+      <div class="data-tools-section-heading">
+        <div>
+          <h3 id="catalogImportTitle">Catalog Import</h3>
+          <p>Choose whether to preserve your current catalog or replace it.</p>
+        </div>
+      </div>
+      <div class="data-tools-card-grid import-card-grid">
+        <article class="data-tool-card primary-tool-card">
+          <div class="data-tool-card-icon" aria-hidden="true">➕</div>
+          <div class="data-tool-card-copy">
+            <h4>Add &amp; Merge CSV</h4>
+            <p>Add new products and update matching products. Existing products not included in the file remain unchanged.</p>
+          </div>
+          <label class="data-tool-action primary-action">
+            Choose CSV
+            <input id="csvMergeUpload" type="file" accept=".csv,text/csv" hidden>
+          </label>
+        </article>
+
+        <article class="data-tool-card danger-tool-card">
+          <div class="data-tool-card-topline">
+            <div class="data-tool-card-icon" aria-hidden="true">↻</div>
+            <button id="replaceCatalogInfoBtn" class="section-info-btn" type="button" aria-label="Replace catalog information">i</button>
+          </div>
+          <div class="data-tool-card-copy">
+            <h4>Replace Local Catalog</h4>
+            <p>Replace this device's local catalog with the selected file. Products missing from the CSV will be removed locally.</p>
+          </div>
+          <label class="data-tool-action danger-action">
+            Replace Catalog
+            <input id="csvReplaceUpload" type="file" accept=".csv,text/csv" hidden>
+          </label>
+        </article>
+      </div>
+    </section>
+
+    <section class="data-tools-section" aria-labelledby="exportBackupTitle">
+      <div class="data-tools-section-heading">
+        <div>
+          <h3 id="exportBackupTitle">Export &amp; Backup</h3>
+          <p>Save catalog data or transfer your local profile.</p>
+        </div>
+      </div>
+      <div class="data-tools-action-grid">
+        <button id="exportItemsBtn" class="data-tools-action-button" type="button"><span aria-hidden="true">📄</span><strong>Export Items CSV</strong><small>Download the current local catalog.</small></button>
+        <button id="exportProfileBtn" class="data-tools-action-button" type="button"><span aria-hidden="true">💾</span><strong>Export Profile</strong><small>Back up local app preferences and lists.</small></button>
+        <label class="data-tools-action-button data-tools-file-button"><span aria-hidden="true">📥</span><strong>Import Profile</strong><small>Restore a previously exported profile.</small><input id="importProfile" type="file" accept=".json,application/json" hidden></label>
+      </div>
+    </section>
+
+    <section class="data-tools-section maintenance-section" aria-labelledby="maintenanceTitle">
+      <div class="data-tools-section-heading">
+        <div>
+          <h3 id="maintenanceTitle">Maintenance</h3>
+          <p>Use these actions only when you need to recover or refresh local data.</p>
+        </div>
+      </div>
+      <button id="resetBtn" class="maintenance-reset-button" type="button"><span aria-hidden="true">⟲</span><span><strong>Reset Catalog Data</strong><small>Restore the bundled catalog included with the app.</small></span></button>
+    </section>
+  </section>
+
   <section id="frontStockView" class="view">
     <section class="panel section-head">
       <h2>Final Order</h2>
@@ -280,4 +358,4 @@
   </div>
 </div>
 
-<footer>Data source: Google Sheets when configured, with local cache and bundled CSV fallback.</footer><script src="data.js"></script><script src="src/core/config/AppConfig.js"></script><script src="src/core/logging/Logger.js"></script><script src="src/core/utils/UrlUtils.js"></script><script src="src/core/http/HttpClient.js"></script><script src="src/core/storage/LocalStorageClient.js"></script><script src="src/core/router/Router.js"></script><script src="src/app.js"></script><script src="js/providers/LocalCatalogProvider.js"></script><script src="js/providers/GoogleSheetsCatalogProvider.js"></script><script src="js/services/CatalogService.js"></script><script src="src/modules/products/providers/LegacyCatalogProductProvider.js"></script><script src="src/modules/products/ProductRepository.js"></script><script src="src/modules/products/ProductService.js"></script><script src="src/modules/products/ProductView.js"></script><script src="src/modules/products/ProductController.js"></script><script src="app.js"></script></body></html>
+<footer>Local-first catalog with user-controlled remote updates.</footer><script src="data.js"></script><script src="src/core/config/AppConfig.js"></script><script src="src/core/logging/Logger.js"></script><script src="src/core/utils/UrlUtils.js"></script><script src="src/core/http/HttpClient.js"></script><script src="src/core/storage/LocalStorageClient.js"></script><script src="src/core/storage/IndexedDbClient.js"></script><script src="src/core/router/Router.js"></script><script src="src/app.js"></script><script src="js/providers/LocalCatalogProvider.js"></script><script src="js/providers/GoogleSheetsCatalogProvider.js"></script><script src="js/services/CatalogService.js"></script><script src="src/modules/products/providers/LegacyCatalogProductProvider.js"></script><script src="src/modules/products/providers/StaticCatalogVersionProvider.js"></script><script src="src/modules/products/providers/IndexedDbProductProvider.js"></script><script src="src/modules/products/ProductRepository.js"></script><script src="src/modules/products/ProductService.js"></script><script src="src/modules/products/ProductView.js"></script><script src="src/modules/products/ProductController.js"></script><script src="app.js"></script></body></html>
