@@ -1766,3 +1766,40 @@ body.mobile-bottom-ui #lookupView{
   .catalog-update-button{grid-column:1/-1;width:100%}
   .compact-secondary-button{flex:0 0 auto}
 }
+
+/* v50.3 app asset update prompt */
+.app-update-banner{position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:260;display:flex;align-items:center;justify-content:space-between;gap:18px;width:min(760px,calc(100% - 24px));box-sizing:border-box;padding:12px 14px;border:1px solid #8fbfb5;border-radius:14px;background:#fff;box-shadow:0 8px 28px #00000024}
+.app-update-banner[hidden]{display:none!important}
+.app-update-banner-copy{display:flex;align-items:center;gap:11px;min-width:0}
+.app-update-banner-copy>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.app-update-banner-copy strong{font-size:.92rem;line-height:1.3}
+.app-update-banner-copy small{color:#667078;font-size:.76rem;line-height:1.35}
+.app-update-banner-icon{width:36px;height:36px;flex:0 0 36px;border-radius:10px;display:grid;place-items:center;background:#e7f4f0;color:var(--primary);font-size:1.1rem;font-weight:800}
+.app-update-banner-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.app-update-banner-actions button{min-height:36px;padding:8px 12px;border-radius:10px;font-weight:800}
+#appUpdateBtn{border:1px solid var(--g);background:linear-gradient(135deg,var(--g),var(--gd));color:#fff}
+.app-update-dismiss{border:1px solid var(--b);background:#fff;color:#536068}
+#appUpdateBtn:disabled{opacity:.6;cursor:wait}
+@media(max-width:640px){
+  .app-update-banner{top:8px;align-items:stretch;flex-direction:column;gap:10px;padding:11px 12px}
+  .app-update-banner-actions{display:grid;grid-template-columns:1fr auto}
+  #appUpdateBtn{width:100%}
+}
+
+/* v51.1 expandable daily order history */
+.history-card-expandable{padding:0;overflow:hidden}
+.history-card-summary{width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 16px;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.history-card-summary:hover{background:rgba(22,101,52,.045)}
+.history-card-summary:focus-visible{outline:3px solid rgba(22,101,52,.22);outline-offset:-3px}
+.history-toggle{font-size:1.15rem;font-weight:800;min-width:28px;text-align:center}
+.history-detail{border-top:1px solid var(--b);padding:14px 16px 16px;background:#fff}
+.history-detail-section+.history-detail-section{margin-top:14px}
+.history-detail h4{margin:0 0 8px;font-size:.92rem}
+.history-item-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--b)}
+.history-item-row:last-child{border-bottom:0}
+.history-item-name{font-weight:650;min-width:0;overflow-wrap:anywhere}
+.history-item-code{font-size:.8rem;color:var(--muted)}
+.history-item-qty{min-width:34px;text-align:right}
+.history-empty{margin:0;color:var(--muted);font-size:.88rem}
+.history-export-btn{margin-top:14px}
+@media (max-width:600px){.history-item-row{grid-template-columns:minmax(0,1fr) auto}.history-item-code{grid-column:1/2}.history-item-qty{grid-column:2/3;grid-row:1/3}}

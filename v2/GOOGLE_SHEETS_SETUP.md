@@ -1,58 +1,61 @@
-# Google Sheets connection
+# Google Sheets Product Catalog Setup - v50
 
-The app now supports one-request catalog synchronization through a Google Apps Script web app.
+The app is local-first. It reads `data/versions.json` during startup and does not download Google Sheet data automatically.
 
-## 1. Add the server script
+## 1. Configure the Apps Script endpoint
 
-1. Open the Google Sheet.
-2. Select **Extensions > Apps Script**.
-3. Replace the editor contents with `google-apps-script.gs` from this project.
-4. Save the project.
+Open the Google Spreadsheet and choose **Extensions > Apps Script**.
 
-## 2. Deploy it
+Copy the contents of `google-apps-script.gs` into the Apps Script project.
 
-1. Select **Deploy > New deployment**.
-2. Choose **Web app**.
-3. Execute as: **Me**.
-4. Who has access: **Anyone**.
-5. Deploy and copy the `/exec` URL.
+Deploy it as a web app:
 
-Whenever the Apps Script code changes, create a new deployment version or edit the existing deployment and choose **New version**.
+- Execute as: **Me**
+- Who has access: **Anyone**
 
-## 3. Configure the app
+Copy the deployment URL ending in `/exec`.
 
-Open `js/AppConfig.js` and paste the deployment URL into:
+Paste it in one place:
 
-```js
+```javascript
+// src/core/config/AppConfig.js
 apiUrl: "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec"
 ```
 
-This is the only URL that must be maintained in the app.
+Do not use the Google Sheet `/edit` URL or a Publish-to-web URL.
 
-## Sync behavior
+## 2. Publish a catalog version
 
-- Cached catalog data displays immediately.
-- The app sends one background request with its cached catalog version.
-- If `catalog_version` is unchanged, the server returns only a small `updated: false` response.
-- If the version changed, all six catalog datasets are returned in one JSON response.
-- On network failure, the app continues with cached data or its bundled CSV fallback.
+The version must match in both places:
 
-Increase `catalog_version` in `app_settings` whenever catalog data should be downloaded again.
+1. Google Sheet `app_settings` tab: `catalog_version`
+2. GitHub file: `data/versions.json` > `products.version`
 
-## JSONP deployment update (v44)
+Example:
 
-The browser now loads the Apps Script endpoint through JSONP to avoid cross-origin fetch problems on GitHub Pages.
+```json
+{
+  "products": {
+    "version": "1.0.1",
+    "updated_at": "2026-08-03T21:30:00Z"
+  }
+}
+```
 
-After replacing the Apps Script code with `google-apps-script.gs`:
+Recommended publishing order:
 
-1. Open **Deploy > Manage deployments**.
-2. Edit the existing Web App deployment.
-3. Select **New version**.
-4. Keep **Execute as: Me** and **Who has access: Anyone**.
-5. Deploy and continue using the `/exec` URL in `js/AppConfig.js`.
+1. Finish and verify Google Sheet changes.
+2. Increase `catalog_version` in `app_settings`.
+3. Deploy a new Apps Script version if its code changed.
+4. Update `data/versions.json` on GitHub last.
 
-Manual test:
+Updating the GitHub version last prevents users from being offered a release before the remote catalog is ready.
 
-`YOUR_EXEC_URL?version=FORCE_TEST&callback=testCallback`
+## 3. User update flow
 
-The response should begin with `testCallback({` and end with `});`.
+- App opens from IndexedDB immediately.
+- App checks only `data/versions.json`.
+- Data & Backup displays an update when versions differ.
+- Full product data is requested only when the user clicks **Update Catalog**.
+- The response must contain products, product codes, aliases, categories, and store products.
+- If validation fails, the existing IndexedDB catalog is kept.

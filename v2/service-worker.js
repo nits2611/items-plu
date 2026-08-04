@@ -1,4 +1,4 @@
-const CACHE="my-produce-assistant-v50.2-fetch-catalog-update";
+const CACHE="my-produce-assistant-v51.1-order-session-history";
 const SHELL=[
   "./",
   "./index.html",
@@ -13,6 +13,7 @@ const SHELL=[
   "./src/core/router/Router.js",
   "./src/core/utils/UrlUtils.js",
   "./src/core/logging/Logger.js",
+  "./src/core/update/AppUpdateManager.js",
   "./data/versions.json",
   "./js/AppConfig.js",
   "./js/providers/LocalCatalogProvider.js",
@@ -25,6 +26,7 @@ const SHELL=[
   "./src/modules/products/ProductService.js",
   "./src/modules/products/ProductView.js",
   "./src/modules/products/ProductController.js",
+  "./src/modules/orders/LocalOrderSessionStore.js",
   "./manifest.webmanifest",
   "./items.csv",
   "./icons/icon-192.png",
@@ -33,7 +35,10 @@ const SHELL=[
 
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));
-  self.skipWaiting();
+});
+
+self.addEventListener("message",event=>{
+  if(event.data?.type==="SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate",event=>{
@@ -43,8 +48,6 @@ self.addEventListener("activate",event=>{
 
 self.addEventListener("fetch",event=>{
   const url=new URL(event.request.url);
-
-  // Do not intercept cross-origin requests.
   if(url.origin!==self.location.origin) return;
 
   if(url.pathname.endsWith("/items.csv")||url.pathname.endsWith("/data/versions.json")){
@@ -60,9 +63,9 @@ self.addEventListener("fetch",event=>{
     return;
   }
 
-  // Always revalidate code/config files so GitHub Pages does not keep stale
-  // application infrastructure after a deployment.
-  if(/\.(?:js|html)$/.test(url.pathname)||url.pathname.endsWith("/")){
+  // Revalidate application assets so a released app version can be installed
+  // without requiring a manual hard refresh.
+  if(/\.(?:js|css|html)$/.test(url.pathname)||url.pathname.endsWith("/")){
     event.respondWith(
       fetch(event.request,{cache:"no-cache"})
         .then(response=>{

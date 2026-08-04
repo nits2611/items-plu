@@ -29,6 +29,19 @@
 </style>
 
 </head><body>
+<div id="appUpdateBanner" class="app-update-banner" role="status" hidden>
+  <div class="app-update-banner-copy">
+    <span class="app-update-banner-icon" aria-hidden="true">↻</span>
+    <div>
+      <strong id="appUpdateMessage">A new app version is available.</strong>
+      <small>Update to load the latest JavaScript, CSS, and interface changes.</small>
+    </div>
+  </div>
+  <div class="app-update-banner-actions">
+    <button id="appUpdateBtn" type="button">Update now</button>
+    <button id="dismissAppUpdateBtn" class="app-update-dismiss" type="button" aria-label="Dismiss app update">Later</button>
+  </div>
+</div>
 <header>
   <button id="drawerBtn" class="drawer-btn" type="button" aria-label="Open menu">☰</button><div><h1>My Produce Assistant</h1><p>Lookup, scan, favorite, recent items, and order list.</p></div><div class="header-actions">
     
@@ -262,7 +275,7 @@
 
 
   <section id="ordersView" class="view">
-<section class="panel section-head"><h2>Orders</h2><p>Today's regular order workflow: record back stock, prepare final order, then mark it placed.</p><div class="order-actions"><button id="continueOrderBtn" type="button">Continue</button><button id="markOrderPlacedBtn" type="button">Mark Placed</button><button id="unlockOrderBtn" type="button">Unlock Draft</button></div></section>
+<section class="panel section-head"><h2>Orders</h2><p>Today's regular order workflow: record back stock, prepare final order, then mark it placed.</p><div class="order-actions"><button id="continueOrderBtn" type="button">Continue</button><button id="markOrderPlacedBtn" type="button">Mark Placed</button><button id="unlockOrderBtn" type="button">Adjust Order</button></div></section>
 <section class="dashboard-grid"><article class="dashboard-card"><h3>Status</h3><p><span id="orderSessionStatus">Draft</span></p><button id="ordersQuickMarkPlacedBtn" type="button">Mark Placed</button></article><article class="dashboard-card"><h3>Back Stock</h3><p><span id="orderBackCount">0</span> items</p><button id="ordersBackStockBtn" type="button">Open Back Stock</button></article><article class="dashboard-card"><h3>Final Order</h3><p><span id="orderFinalCount">0</span> items</p><button id="ordersFinalOrderBtn" type="button">Open Final Order</button></article></section><section id="ordersHistoryInline" class="order-history-list"></section></section>
 <section id="inventoryView" class="view"><section class="panel section-head"><h2>Inventory</h2><p>Future inventory workflow: separate back stock count and final order count.</p></section><section class="message">Inventory module is planned after the order workflow is stable.</section></section>
 </main>
@@ -358,4 +371,4 @@
   </div>
 </div>
 
-<footer>Local-first catalog with user-controlled remote updates.</footer><script src="data.js"></script><script src="src/core/config/AppConfig.js"></script><script src="src/core/logging/Logger.js"></script><script src="src/core/utils/UrlUtils.js"></script><script src="src/core/http/HttpClient.js"></script><script src="src/core/storage/LocalStorageClient.js"></script><script src="src/core/storage/IndexedDbClient.js"></script><script src="src/core/router/Router.js"></script><script src="src/app.js"></script><script src="js/providers/LocalCatalogProvider.js"></script><script src="js/providers/GoogleSheetsCatalogProvider.js"></script><script src="js/services/CatalogService.js"></script><script src="src/modules/products/providers/LegacyCatalogProductProvider.js"></script><script src="src/modules/products/providers/StaticCatalogVersionProvider.js"></script><script src="src/modules/products/providers/IndexedDbProductProvider.js"></script><script src="src/modules/products/ProductRepository.js"></script><script src="src/modules/products/ProductService.js"></script><script src="src/modules/products/ProductView.js"></script><script src="src/modules/products/ProductController.js"></script><script src="app.js"></script></body></html>
+<footer>Local-first catalog with user-controlled remote updates.</footer><script src="data.js"></script><script src="src/core/config/AppConfig.js"></script><script src="src/core/logging/Logger.js"></script><script src="src/core/utils/UrlUtils.js"></script><script src="src/core/http/HttpClient.js"></script><script src="src/core/storage/LocalStorageClient.js"></script><script src="src/core/storage/IndexedDbClient.js"></script><script src="src/core/router/Router.js"></script><script src="src/core/update/AppUpdateManager.js"></script><script src="src/app.js"></script><script src="js/providers/LocalCatalogProvider.js"></script><script src="js/providers/GoogleSheetsCatalogProvider.js"></script><script src="js/services/CatalogService.js"></script><script src="src/modules/products/providers/LegacyCatalogProductProvider.js"></script><script src="src/modules/products/providers/StaticCatalogVersionProvider.js"></script><script src="src/modules/products/providers/IndexedDbProductProvider.js"></script><script src="src/modules/products/ProductRepository.js"></script><script src="src/modules/products/ProductService.js"></script><script src="src/modules/products/ProductView.js"></script><script src="src/modules/products/ProductController.js"></script><script src="src/modules/orders/LocalOrderSessionStore.js"></script><script src="app.js"></script></body></html>

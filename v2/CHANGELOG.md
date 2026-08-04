@@ -1,3 +1,30 @@
+## v51.1 - Order session consistency and history details
+
+- Back Stock edits now refresh Lookup quantity controls immediately, including after Final Order items exist.
+- Orders cannot be placed unless Final Order contains at least one item.
+- Renamed the placed-order correction action to **Adjust Order**; it unlocks both Back Stock and Final Order for correction, then the revised order can be placed again.
+- Order History now includes today's active session plus past placed dates.
+- History cards are expandable and show Back Stock and Final Order item details for the selected date.
+- Existing export-by-date remains available.
+
+## v51.0 - Daily order sessions
+- Added local date-scoped order sessions for Back Stock and Final Order.
+- A placed order now locks only its own business date instead of blocking future days.
+- Adding Back Stock on a new day automatically uses a fresh Draft session.
+- Back Stock and Final Order remain separate lists but share the same daily session date and status.
+- Added one-time migration from the old global order keys into dated session storage.
+- Existing placed data is preserved in order history and no longer becomes the permanent active order.
+- Changed order business-date generation to local calendar dates instead of UTC dates.
+- No remote database changes were required.
+
+## v50.4 - Back Stock and Final Order consistency
+
+- Back Stock quantity changes now immediately synchronize the matching Back Stock value shown in Final Order.
+- Removing an item from Back Stock clears its Back Stock quantity in Final Order without deleting the Final Order quantity.
+- Once an order is marked Placed, Back Stock edits are blocked from Lookup, Back Stock cards, quantity steppers, and remove actions.
+- Existing unlock-to-draft behavior remains available for authorized correction workflows.
+- No product catalog, Google Sheets, or UI redesign changes.
+
 ## v50.2 - Flexible Google Catalog Response Parsing
 
 - Accepts both wrapped and direct catalog JSON responses.
@@ -217,3 +244,11 @@ No intended changes:
 - Lookup/search UI and filters.
 - Favorites, Recent, Back Stock, Orders, Missing Items, scanner, or routing.
 - Local Add & Merge CSV and Replace Local Catalog behaviour.
+
+## v50.3 - App asset update workflow
+- Added `app.version` to `data/versions.json` alongside the product catalog version.
+- Added a reusable `AppUpdateManager` for service-worker registration and app-version checks.
+- Added a compact "New app version available" banner with Update now / Later actions.
+- The service worker now waits for user confirmation before activating a new release.
+- JavaScript, CSS, and HTML are revalidated so users do not need a manual hard refresh.
+- Product catalog versioning remains independent from frontend application versioning.
