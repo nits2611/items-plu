@@ -39,35 +39,41 @@
       localStorage.removeItem(this.storageUpdatedAtKey);
     }
 
-    requestJsonp(url) {
-      return new Promise((resolve, reject) => {
-        const callbackName = `googleSheetsCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        const script = document.createElement("script");
-        let settled = false;
+    async requestJson(url) {
+      const controller = new AbortController();
+      const timeoutId = global.setTimeout(() => controller.abort(), this.timeoutMs);
 
-        const cleanup = () => {
-          global.clearTimeout(timeoutId);
-          script.remove();
-          try { delete global[callbackName]; } catch (_) { global[callbackName] = undefined; }
-        };
-        const finish = (handler, value) => {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          handler(value);
-        };
-        const timeoutId = global.setTimeout(() => finish(reject, new Error("Google catalog request timed out.")), this.timeoutMs);
+      try {
+        const response = await fetch(url, {
+          method: "GET",
+          redirect: "follow",
+          cache: "no-store",
+          credentials: "omit",
+          headers: {
+            Accept: "application/json, text/plain, */*"
+          },
+          signal: controller.signal
+        });
 
-        global[callbackName] = result => finish(resolve, result);
-        script.onerror = () => finish(reject, new Error("Unable to load the Google catalog endpoint."));
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(`Google catalog request failed with HTTP ${response.status}.`);
+        }
 
-        const requestUrl = new URL(url);
-        requestUrl.searchParams.set("callback", callbackName);
-        requestUrl.searchParams.set("_", String(Date.now()));
-        script.src = requestUrl.toString();
-        script.async = true;
-        document.head.appendChild(script);
-      });
+        try {
+          return JSON.parse(text);
+        } catch (error) {
+          const preview = String(text || "").replace(/\s+/g, " ").slice(0, 180);
+          throw new Error(`Google catalog returned invalid JSON${preview ? `: ${preview}` : "."}`);
+        }
+      } catch (error) {
+        if (error?.name === "AbortError") {
+          throw new Error("Google catalog request timed out.");
+        }
+        throw error;
+      } finally {
+        global.clearTimeout(timeoutId);
+      }
     }
 
     normalizeCatalog(data) {
@@ -94,7 +100,7 @@
       }
       if (force) url.searchParams.set("force", "1");
 
-      const result = await this.requestJsonp(url.toString());
+      const result = await this.requestJson(url.toString());
       if (!result || result.success !== true) {
         throw new Error(result?.message || "Google catalog returned an invalid response.");
       }
