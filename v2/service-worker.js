@@ -1,4 +1,4 @@
-const CACHE="my-produce-assistant-v51.1-order-session-history";
+const CACHE="my-produce-assistant-v51.2-context-scanner";
 const SHELL=[
   "./",
   "./index.html",

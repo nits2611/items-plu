@@ -1,5 +1,5 @@
 const SAVE_ON_BASE=window.AppConfig?.urls?.saveOnSearchBase||"https://www.saveonfoods.com/sm/planning/rsid/1982/results?q=",CSV_URL=window.AppConfig?.urls?.bundledCatalog||"./items.csv",STORAGE_CSV=window.AppConfig?.catalog?.legacyCsvKey||"plu_items_csv_current",STORAGE_HASH=window.AppConfig?.catalog?.legacyCsvHashKey||"plu_items_csv_hash",STORE=window.AppConfig?.storage?.storeNamespace||"default-store";
-let items=[],filter="all",deferredPrompt=null,scannerStream=null,scannerTimer=null;
+let items=[],filter="all",deferredPrompt=null,scannerStream=null,scannerTimer=null,scannerContext="lookup",scannerAccepting=false;
 const q=document.getElementById("q"),results=document.getElementById("results"),msg=document.getElementById("message"),count=document.getElementById("count"),syncStatus=document.getElementById("syncStatus");
 const CODE128=["212222","222122","222221","121223","121322","131222","122213","122312","132212","221213","221312","231212","112232","122132","122231","113222","123122","123221","223211","221132","221231","213212","223112","312131","311222","321122","321221","312212","322112","322211","212123","212321","232121","111323","131123","131321","112313","132113","132311","211313","231113","231311","112133","112331","132131","113123","113321","133121","313121","211331","231131","213113","213311","213131","311123","311321","331121","312113","312311","332111","314111","221411","431111","111224","111422","121124","121421","141122","141221","112214","112412","122114","122411","142112","142211","241211","221114","413111","241112","134111","111242","121142","121241","114212","124112","124211","411212","421112","421211","212141","214121","412121","111143","111341","131141","114113","114311","411113","411311","113141","114131","311141","411131","211412","211214","211232","2331112"];
 
@@ -479,9 +479,48 @@ document.getElementById("updateCatalogBtn")?.addEventListener("click",async()=>{
 document.getElementById("resetBtn").onclick=async()=>{await productController.reset();await checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear back stock?")){setJSON(key("order"),[]);renderOrder()}};
 document.getElementById("exportOrderBtn").onclick=()=>downloadCSV("back-stock.csv",["item_name,code,quantity",...order().map(o=>`"${(o.item_name||"").replaceAll('"','""')}",${o.code},"${String(o.qty).replaceAll('"','""')}"`)].join("\n"));document.getElementById("exportProfileBtn").onclick=()=>{const data={favorites:favs(),recent:recents(),order:order(),exportedAt:new Date().toISOString()};downloadFile("plu-profile.json",JSON.stringify(data,null,2),"application/json")};document.getElementById("importProfile")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(data.favorites)setJSON(key("favorites"),data.favorites);if(data.recent)setJSON(key("recent"),data.recent);if(data.order)setJSON(key("order"),data.order);renderAll()});
 function downloadCSV(n,t){downloadFile(n,t,"text/csv")}function downloadFile(n,t,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type}));a.download=n;a.click();URL.revokeObjectURL(a.href)}
-async function startScanner(){if(!("BarcodeDetector" in window)){alert("Camera barcode scanner is not supported in this browser. Try Android Chrome. Bluetooth scanner can still type into search.");return}const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),status=document.getElementById("scannerStatus");modal.hidden=false;status.textContent="Opening camera...";try{scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});video.srcObject=scannerStream;await video.play();const detector=new BarcodeDetector({formats:["code_128","ean_13","upc_a","upc_e","ean_8"]});status.textContent="Point camera at barcode.";scannerTimer=setInterval(async()=>{try{const codes=await detector.detect(video);if(codes.length){const val=codes[0].rawValue;stopScanner();q.value=val;touch(val);switchView("lookup");renderLookup();if(!getResults().length){renderNotFound(val)}}}catch{}},500)}catch(e){status.textContent="Camera unavailable. Check permission/HTTPS."}}
-function stopScanner(){const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo");modal.hidden=true;if(scannerTimer)clearInterval(scannerTimer);scannerTimer=null;if(scannerStream)scannerStream.getTracks().forEach(t=>t.stop());scannerStream=null;video.srcObject=null}
-document.getElementById("scanBtn").onclick=startScanner;document.getElementById("closeScannerBtn").onclick=stopScanner;
+function positionScannerDetection(code){
+ const video=document.getElementById("scannerVideo"),box=document.getElementById("scannerDetectionBox");
+ if(!video||!box||!video.videoWidth||!video.videoHeight)return false;
+ const rect=video.getBoundingClientRect();
+ let left,top,width,height;
+ if(Array.isArray(code.cornerPoints)&&code.cornerPoints.length){
+  const xs=code.cornerPoints.map(p=>Number(p.x)||0),ys=code.cornerPoints.map(p=>Number(p.y)||0);
+  left=Math.min(...xs);top=Math.min(...ys);width=Math.max(...xs)-left;height=Math.max(...ys)-top;
+ }else if(code.boundingBox){
+  left=Number(code.boundingBox.x)||0;top=Number(code.boundingBox.y)||0;width=Number(code.boundingBox.width)||0;height=Number(code.boundingBox.height)||0;
+ }else{return false}
+ const sx=rect.width/video.videoWidth,sy=rect.height/video.videoHeight;
+ box.style.left=`${Math.max(0,left*sx)}px`;box.style.top=`${Math.max(0,top*sy)}px`;
+ box.style.width=`${Math.max(30,width*sx)}px`;box.style.height=`${Math.max(22,height*sy)}px`;
+ box.classList.add("visible");return true;
+}
+function handleScannerResult(value,context){
+ const val=String(value||"").trim();if(!val)return;
+ touch(val);
+ if(context==="finalOrder"){
+  const input=document.getElementById("frontQ");if(input)input.value=val;
+  switchView("frontStock");
+  if(typeof renderFrontSearchResults==="function")renderFrontSearchResults();
+  setTimeout(()=>document.querySelector("#frontSearchResults .front-qty-input")?.focus(),80);
+  return;
+ }
+ q.value=val;switchView("lookup");renderLookup();if(!getResults().length)renderNotFound(val);
+}
+async function startScanner(context="lookup"){
+ if(!("BarcodeDetector" in window)){alert("Camera barcode scanner is not supported in this browser. Try Android Chrome. Bluetooth scanner can still type into search.");return}
+ scannerContext=context||"lookup";scannerAccepting=false;
+ const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),status=document.getElementById("scannerStatus"),box=document.getElementById("scannerDetectionBox");
+ if(box){box.classList.remove("visible");box.removeAttribute("style")}
+ modal.hidden=false;status.textContent=scannerContext==="finalOrder"?"Point camera at a barcode to add it to Final Order.":"Point camera at barcode.";
+ try{
+  scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}}});video.srcObject=scannerStream;await video.play();
+  const detector=new BarcodeDetector({formats:["code_128","ean_13","upc_a","upc_e","ean_8"]});
+  scannerTimer=setInterval(async()=>{if(scannerAccepting)return;try{const codes=await detector.detect(video);if(!codes.length){box?.classList.remove("visible");return}const code=codes[0],val=code.rawValue;if(!val)return;scannerAccepting=true;positionScannerDetection(code);status.textContent=`Detected ${val}`;if(navigator.vibrate)navigator.vibrate(80);setTimeout(()=>{const target=scannerContext;stopScanner();handleScannerResult(val,target)},420)}catch{}},350);
+ }catch(e){status.textContent="Camera unavailable. Check permission/HTTPS."}
+}
+function stopScanner(){const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),box=document.getElementById("scannerDetectionBox");modal.hidden=true;if(scannerTimer)clearInterval(scannerTimer);scannerTimer=null;if(scannerStream)scannerStream.getTracks().forEach(t=>t.stop());scannerStream=null;video.srcObject=null;scannerAccepting=false;if(box){box.classList.remove("visible");box.removeAttribute("style")}}
+document.getElementById("scanBtn").onclick=()=>startScanner("lookup");document.getElementById("closeScannerBtn").onclick=stopScanner;
 const exportMissingBtn = document.getElementById("exportMissingBtn");
 if (exportMissingBtn) {
   exportMissingBtn.onclick = () => {
@@ -1834,7 +1873,7 @@ ready(function(){
  const start=document.getElementById("startFrontStockBtn"); if(start)start.onclick=()=>switchView("frontStock");
  const back=document.getElementById("backToBackStockBtn"); if(back)back.onclick=()=>switchView("order");
  const q=document.getElementById("frontQ"); if(q)q.addEventListener("input",renderFrontSearchResults);
- const scan=document.getElementById("frontScanBtn"); if(scan)scan.onclick=()=>{document.getElementById("scanBtn")?.click();toast("Scan code, then search it in Final Order")};
+ const scan=document.getElementById("frontScanBtn"); if(scan)scan.onclick=()=>startScanner("finalOrder");
  const ex=document.getElementById("exportFrontStockBtn"); if(ex)ex.onclick=exportFront;
  const comb=document.getElementById("exportCombinedStockBtn"); if(comb)comb.onclick=exportCombined;
  const clr=document.getElementById("clearFrontStockBtn"); if(clr)clr.onclick=()=>{if(confirm("Clear final order list?")){setFrontStock([]);renderFrontStock();renderFrontSearchResults()}};

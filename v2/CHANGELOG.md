@@ -1,3 +1,10 @@
+## v51.2 - Context-aware scanner
+
+- Final Order scanner now stays on Final Order and searches the scanned product there.
+- Lookup scanner continues to return to Lookup.
+- Added a live detected-barcode rectangle using BarcodeDetector corner points or bounding box when supported.
+- Added a central scan guide, short confirmation delay, vibration feedback, and duplicate-scan protection.
+
 ## v51.1 - Order session consistency and history details
 
 - Back Stock edits now refresh Lookup quantity controls immediately, including after Final Order items exist.

@@ -283,7 +283,7 @@
 <button id="mobileSearchFab" class="mobile-search-fab" type="button" aria-label="Open search">
   🔍
 </button>
-<div id="scannerModal" class="scanner-modal" hidden><div class="scanner-card"><div class="scanner-head"><h2>Scan Barcode</h2><button id="closeScannerBtn" type="button">Close</button></div><video id="scannerVideo" playsinline></video><p id="scannerStatus">Point camera at barcode.</p></div></div>
+<div id="scannerModal" class="scanner-modal" hidden><div class="scanner-card"><div class="scanner-head"><h2>Scan Barcode</h2><button id="closeScannerBtn" type="button">Close</button></div><div id="scannerViewport" class="scanner-viewport"><video id="scannerVideo" playsinline></video><div class="scanner-guide" aria-hidden="true"></div><div id="scannerDetectionBox" class="scanner-detection-box" aria-hidden="true"><span>Detected</span></div></div><p id="scannerStatus">Point camera at barcode.</p></div></div>
 
 <div id="missingModal" class="missing-modal" hidden>
   <div class="missing-card">
