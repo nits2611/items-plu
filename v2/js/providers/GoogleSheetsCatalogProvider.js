@@ -77,14 +77,61 @@
     }
 
     normalizeCatalog(data) {
+      const source = data && typeof data === "object" ? data : {};
       return {
-        products: data?.products,
-        productCodes: data?.productCodes ?? data?.product_codes,
-        productAliases: data?.productAliases ?? data?.product_aliases,
-        categories: data?.categories,
-        storeProducts: data?.storeProducts ?? data?.store_products,
-        appSettings: data?.appSettings ?? data?.app_settings ?? []
+        products: source.products,
+        productCodes: source.productCodes ?? source.product_codes,
+        productAliases: source.productAliases ?? source.product_aliases,
+        categories: source.categories,
+        storeProducts: source.storeProducts ?? source.store_products,
+        appSettings: source.appSettings ?? source.app_settings ?? []
       };
+    }
+
+    unwrapCatalogPayload(result) {
+      if (!result || typeof result !== "object") return null;
+
+      const candidates = [
+        result.data,
+        result.catalog,
+        result.payload,
+        result.result?.data,
+        result.result?.catalog,
+        result.result,
+        result
+      ];
+
+      return candidates.find(candidate => {
+        if (!candidate || typeof candidate !== "object") return false;
+        const catalog = this.normalizeCatalog(candidate);
+        return Array.isArray(catalog.products) ||
+          Array.isArray(catalog.productCodes) ||
+          Array.isArray(catalog.productAliases) ||
+          Array.isArray(catalog.categories) ||
+          Array.isArray(catalog.storeProducts);
+      }) || null;
+    }
+
+    getResponseVersion(result, catalogPayload) {
+      const directVersion = result?.version ?? result?.catalogVersion ??
+        result?.data?.version ?? result?.data?.catalogVersion ??
+        result?.result?.version ?? result?.result?.catalogVersion;
+
+      if (String(directVersion ?? "").trim()) {
+        return String(directVersion).trim();
+      }
+
+      const settings = this.normalizeCatalog(catalogPayload).appSettings;
+      if (Array.isArray(settings)) {
+        const row = settings.find(item => {
+          const key = item?.key ?? item?.setting_key ?? item?.setting_name ?? "";
+          return String(key).trim().toLowerCase() === "catalog_version";
+        });
+        const settingVersion = row?.value ?? row?.setting_value ?? "";
+        if (String(settingVersion).trim()) return String(settingVersion).trim();
+      }
+
+      return "";
     }
 
     async downloadCatalog({ force = true } = {}) {
@@ -101,12 +148,22 @@
       if (force) url.searchParams.set("force", "1");
 
       const result = await this.requestJson(url.toString());
-      if (!result || result.success !== true) {
-        throw new Error(result?.message || "Google catalog returned an invalid response.");
+      const explicitFailure = result?.success === false ||
+        result?.success === "false" ||
+        result?.ok === false ||
+        String(result?.status || "").toLowerCase() === "error";
+
+      if (explicitFailure) {
+        throw new Error(result?.message || result?.error || "Google catalog request failed.");
       }
 
-      const catalog = this.normalizeCatalog(result.data);
-      const version = String(result.version ?? result.catalogVersion ?? "").trim();
+      const catalogPayload = this.unwrapCatalogPayload(result);
+      if (!catalogPayload) {
+        throw new Error("Google catalog returned JSON, but no recognizable product catalog was found in the response.");
+      }
+
+      const catalog = this.normalizeCatalog(catalogPayload);
+      const version = this.getResponseVersion(result, catalogPayload);
       if (!version) throw new Error("Google catalog response is missing its version.");
 
       const required = ["products", "productCodes", "productAliases", "categories", "storeProducts"];

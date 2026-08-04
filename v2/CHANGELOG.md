@@ -1,4 +1,97 @@
+## v50.2 - Flexible Google Catalog Response Parsing
+
+- Accepts both wrapped and direct catalog JSON responses.
+- Does not require `success: true` when valid catalog arrays are present.
+- Supports camelCase and snake_case table names.
+- Reads catalog version from the response or `app_settings`.
+- Preserves the existing local catalog when validation fails.
+
+## v50.1 - Direct Fetch Catalog Update
+
+- Replaced the JSONP catalog download with a normal `fetch()` request.
+- Explicitly follows the normal Google Apps Script redirect to the final response.
+- Added request timeout, no-store caching, JSON validation, and clearer HTTP/response errors.
+- Kept the manual-update behavior and existing local catalog preservation unchanged.
+- No extra diagnostic requests are made.
+
 # Changelog
+
+## v49.4.1 - Add & Merge button visibility fix
+- Fixed the Add & Merge CSV Choose CSV button using the app's existing green theme variables.
+- Added clearer hover, focus, and pressed states without changing Data & Backup functionality.
+- Bumped the service-worker cache for reliable deployment.
+
+## v49.4 - Dedicated Data & Backup Page
+
+Goal:
+- Move catalog import, export, backup, and maintenance tools out of the crowded modal into a full routed page.
+
+Changes:
+- Added the `#/data-tools` SPA route and dedicated Data & Backup view.
+- Added responsive import cards for Add & Merge and Replace Local Catalog.
+- Kept the destructive replace warning in the existing info tooltip and confirmation step.
+- Added organized Export & Backup and Maintenance sections.
+- Reused all existing import/export/reset handlers and element IDs.
+- Updated the drawer action to navigate to the page instead of opening a modal.
+- Bumped the service-worker cache to v49.4.
+
+## v49.3 - Replace catalog UI refinement
+
+### Fixes
+- Restyled **Replace Local Catalog** as a clear, compact destructive action.
+- Replaced the full-width local-scope notice with an information tooltip beside the action.
+- The tooltip explains device/store scope and warns that products missing from the replacement CSV will be removed locally.
+- Service-worker cache bumped to v49.3.
+
+## v49.2 - Safe local store catalog import
+
+### Goal
+Prevent accidental catalog deletion and clarify import scope before multi-store database integration.
+
+### Changes
+- Replaced the single risky Upload CSV action with **Add & Merge CSV** and **Replace Local Catalog**.
+- Merge matches products by code first, then by normalized name + brand + quantity + organic type when no code exists.
+- Existing products absent from a merge file are preserved.
+- Duplicate rows inside the uploaded CSV are skipped.
+- Existing matched products are updated only with non-empty uploaded values.
+- Replace requires explicit confirmation and rejects empty/invalid CSV files.
+- Both actions persist through the Product repository and IndexedDB.
+- Added clear wording that the current operation is local to this device/store and does not modify a shared master catalog or another store.
+- Service-worker cache bumped to v49.2.
+
+### Deferred
+- Actual normalized writes to `products`, `product_codes`, and `store_products` will be implemented when the remote/database provider is introduced.
+- Role-based System Admin master-catalog imports.
+
+## v49.1 - Missing Items compatibility fix
+
+### Fixes
+- Missing Item Image URL and local image path are now saved with the Missing Item record.
+- Missing Item image fields are included in Missing CSV export/import.
+- Missing Item cards display the saved image when available.
+- Promoting a Missing Item to the catalog preserves its image fields.
+- Add to Catalog now persists through the Product repository/provider path so the new IndexedDB cache stays synchronized.
+- Restored a robust Missing CSV import path compatible with the expanded Missing Item schema.
+
+# Changelog
+
+## v49 - Product catalog IndexedDB migration
+
+Goal: move the Product module's primary local catalog read cache to IndexedDB without changing Product Lookup UI, routing, remote-sync behavior, or order behavior.
+
+Changes:
+- Added `src/core/storage/IndexedDbClient.js` as the common IndexedDB infrastructure wrapper.
+- Added `src/modules/products/providers/IndexedDbProductProvider.js`.
+- ProductRepository now reads through the IndexedDB provider instead of directly through the legacy catalog bridge.
+- On the first v49 run, the currently available stable catalog source is automatically copied into IndexedDB.
+- Subsequent app starts load Product Lookup data from IndexedDB first.
+- Catalog changes received through the existing update flow and CSV imports are persisted into IndexedDB.
+- Reset clears/rebuilds the IndexedDB Product cache while preserving existing reset/update behavior.
+- Existing legacy localStorage catalog/cache remains temporarily as a compatibility and remote-sync fallback; removing that duplicate cache is intentionally deferred until the new manual version/update workflow is implemented.
+- No intended UI, routing, scanner, Favorites, Recent, Back Stock, Final Order, or order-workflow changes.
+- Service-worker cache bumped to v49.
+
+Regression target: behavior should remain identical to v48.1.
 
 ## v48.1 - Lookup info tooltip consistency fix
 
@@ -103,3 +196,24 @@ Introduce the new application foundation without intentionally changing existing
 - Manual catalog update workflow
 - Product module MVC refactor
 - Order module MVC refactor
+
+## v50 - Manual Catalog Update
+
+Goal: Check catalog availability without downloading the full Google Sheets catalog on every app load.
+
+Changes:
+- Product Lookup still loads immediately from IndexedDB.
+- Added a lightweight same-origin `data/versions.json` check.
+- Added Catalog Updates section to Data & Backup.
+- A newer version is shown to the user but is not installed automatically.
+- Added user-controlled Update Catalog action.
+- Remote downloads are validated before the IndexedDB catalog is replaced.
+- A failed or incomplete update preserves the existing local catalog.
+- Added product-domain routing to the Apps Script template using `action=products`.
+- Added a separate local release-version key so old cloud-cache metadata cannot cause false update results.
+- Updated service-worker cache to v50.
+
+No intended changes:
+- Lookup/search UI and filters.
+- Favorites, Recent, Back Stock, Orders, Missing Items, scanner, or routing.
+- Local Add & Merge CSV and Replace Local Catalog behaviour.

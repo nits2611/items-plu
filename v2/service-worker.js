@@ -1,4 +1,4 @@
-const CACHE="my-produce-assistant-v50.1-fetch-catalog-update";
+const CACHE="my-produce-assistant-v50.2-fetch-catalog-update";
 const SHELL=[
   "./",
   "./index.html",
