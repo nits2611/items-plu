@@ -1833,7 +1833,12 @@ function resultCard(item){
 window.renderFrontSearchResults=function(){
  const q=document.getElementById("frontQ"), box=document.getElementById("frontSearchResults"); if(!q||!box)return;
  const query=q.value.trim(); box.innerHTML="";
- if(!query){box.innerHTML='<section class="message compact-msg">Search or scan an item to enter final order quantity.</section>';return}
+ if(!query){
+  if(!frontStock().length){
+   box.innerHTML='<section class="message compact-msg final-order-empty-guide"><strong>Start today’s Final Order</strong><span>Search or scan a product, then enter the quantity you want to order. Your saved Back Stock quantity will appear beside it.</span></section>';
+  }
+  return;
+ }
  const arr=matches(query);
  if(!arr.length){
   const m=document.createElement("section"); m.className="message compact-msg";
@@ -1846,7 +1851,7 @@ window.renderFrontSearchResults=function(){
 window.renderFrontStock=function(){
  const box=document.getElementById("frontStockResults"); if(!box)return; box.innerHTML="";
  const list=frontStock();
- if(!list.length){box.innerHTML='<section class="message">No final order items yet. Search or scan items above.</section>';return}
+ if(!list.length){return}
  list.forEach(row=>{
   const e=document.createElement("article"); e.className="order-item front-stock-item";
   e.innerHTML='<div class="order-row"><div><h3></h3><div class="code"></div><div class="front-meta"><span class="back-stock-chip">Back: <b></b></span><span class="front-stock-chip">Front: <b></b></span></div></div><button type="button" class="danger remove-front">Remove</button></div>';
@@ -1982,14 +1987,21 @@ window.renderOrderHistory=function(){
     const e=document.createElement("article");
     e.className="history-card history-card-expandable";
     const detailId=`history-detail-${String(h.id).replace(/[^a-zA-Z0-9_-]/g,"-")}-${Math.random().toString(36).slice(2,7)}`;
-    e.innerHTML=`<button type="button" class="history-card-summary" aria-expanded="false" aria-controls="${detailId}"><div><h3></h3><p></p><div class="history-meta"><span>Back: <b></b></span><span>Final: <b></b></span></div></div><span class="history-toggle" aria-hidden="true">⌄</span></button><div id="${detailId}" class="history-detail" hidden><div class="history-detail-section"><h4>Back Stock</h4><div class="history-back-list"></div></div><div class="history-detail-section"><h4>Final Order</h4><div class="history-final-list"></div></div><button type="button" class="history-export-btn">Export CSV</button></div>`;
+    e.innerHTML=`<button type="button" class="history-card-summary" aria-expanded="false" aria-controls="${detailId}"><span class="history-date-tile" aria-hidden="true"><b class="history-day"></b><small class="history-month"></small></span><span class="history-summary-copy"><span class="history-title-row"><strong class="history-title"></strong><span class="history-status-badge"></span></span><span class="history-subtitle"></span><span class="history-counts"><span><b class="history-back-count"></b><small>Back Stock</small></span><span><b class="history-final-count"></b><small>Final Order</small></span></span></span><span class="history-summary-action"><small>View details</small><span class="history-toggle" aria-hidden="true">⌄</span></span></button><div id="${detailId}" class="history-detail" hidden><div class="history-detail-section"><h4>Back Stock</h4><div class="history-back-list"></div></div><div class="history-detail-section"><h4>Final Order</h4><div class="history-final-list"></div></div><button type="button" class="history-export-btn">Export CSV</button></div>`;
     const dateObj=new Date(`${h.date}T12:00:00`);
-    e.querySelector("h3").textContent=`${h.isCurrent?"Today · ":""}${dateObj.toLocaleDateString()}`;
-    e.querySelector("p").textContent=h.isCurrent
-      ? `${h.status} session`
-      : `Placed ${h.placedAt?new Date(h.placedAt).toLocaleTimeString():""}`;
-    e.querySelector(".history-meta b").textContent=(h.backStock||[]).length;
-    e.querySelectorAll(".history-meta b")[1].textContent=(h.finalOrder||[]).length;
+    const statusText=String(h.status||"Placed");
+    e.querySelector(".history-day").textContent=dateObj.toLocaleDateString(undefined,{day:"2-digit"});
+    e.querySelector(".history-month").textContent=dateObj.toLocaleDateString(undefined,{month:"short"}).toUpperCase();
+    e.querySelector(".history-title").textContent=h.isCurrent?"Today’s order":dateObj.toLocaleDateString(undefined,{weekday:"long"});
+    e.querySelector(".history-subtitle").textContent=h.isCurrent
+      ? dateObj.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric",year:"numeric"})
+      : `Placed ${h.placedAt?new Date(h.placedAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):""}`.trim();
+    const badge=e.querySelector(".history-status-badge");
+    badge.textContent=statusText;
+    badge.classList.toggle("is-draft",statusText.toLowerCase()==="draft");
+    badge.classList.toggle("is-placed",statusText.toLowerCase()==="placed");
+    e.querySelector(".history-back-count").textContent=(h.backStock||[]).length;
+    e.querySelector(".history-final-count").textContent=(h.finalOrder||[]).length;
 
     const fill=(container,list,emptyText)=>{
       container.innerHTML="";
@@ -2014,6 +2026,8 @@ window.renderOrderHistory=function(){
       summary.setAttribute("aria-expanded",String(!open));
       detail.hidden=open;
       e.querySelector(".history-toggle").textContent=open?"⌄":"⌃";
+      const actionLabel=e.querySelector(".history-summary-action small");
+      if(actionLabel) actionLabel.textContent=open?"View details":"Hide details";
     };
     e.querySelector(".history-export-btn").onclick=()=>{
       if(h.isCurrent){

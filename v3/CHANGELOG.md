@@ -1,3 +1,35 @@
+## v52.0.5 - Mobile header alignment fix
+
+- Fixed the remaining 10px gap between the top navbar and regular page headers on mobile.
+- Preserved the full-width mobile header treatment from v52.0.4.
+- Lookup remains unchanged because its title already sits directly beneath the navbar.
+- No business logic changes.
+
+
+## v52.0.4 - Mobile full-width header correction
+- Rebuilt the mobile heading fix using a true viewport-width breakout.
+- Page headings now extend edge-to-edge even though page content keeps its normal mobile padding.
+- Preserved the corrected mobile top spacing from v52.0.2.
+- No business logic changes.
+
+## v52.0.4 - Mobile full-width heading correction
+
+- Restored edge-to-edge page headings on mobile while preserving the corrected top spacing from v52.0.2.
+- Lookup fixed heading now spans the full viewport width.
+- Other page headers extend through the mobile view padding without changing content spacing.
+- No business logic changes.
+
+# Changelog
+
+## v52.0.2 - Shell corrections from stable v52.0
+
+- Rebuilt this patch directly from v52.0; v52.0.1 is fully discarded.
+- Removed excessive mobile top spacing while retaining sticky page headings.
+- Final Order guidance now appears only when the order list is empty.
+- Lookup search drawer now clears the v52 mobile bottom navigation.
+- Redesigned dated Order History summaries with clear date, status, counts and expandable details.
+- No business logic or storage behavior changed.
+
 ## v52.0 - Application shell and design foundation
 
 - Added the new professional responsive application shell.

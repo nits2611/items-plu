@@ -1,4 +1,4 @@
-const CACHE="my-produce-assistant-v52.0-ui-shell";
+const CACHE="my-produce-assistant-v52.0.5-header-alignment";
 const SHELL=[
   "./",
   "./index.html",
