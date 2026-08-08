@@ -241,7 +241,7 @@ function renderOrder(){
     e.querySelector("h3").textContent=item.item_name;
     e.querySelector(".code").textContent=row.code;
     e.querySelector(".qty").textContent=row.qty;
-    e.querySelector(".barcode").appendChild(code128SVG(row.code));
+    window.BarcodeRenderer.render(e.querySelector(".barcode"),row.code);
     const edit=e.querySelector(".edit-order-qty");
     const remove=e.querySelector(".remove-order");
     edit.disabled=locked;
@@ -360,7 +360,7 @@ function card(x) {
     e.querySelector(".thumb").replaceWith(img);
   }
 
-  e.querySelector(".barcode").appendChild(code128SVG(x.code));
+  window.BarcodeRenderer.render(e.querySelector(".barcode"),x.code);
 
   const fav = e.querySelector(".fav");
   fav.textContent = isFav(x.code) ? "★" : "☆";

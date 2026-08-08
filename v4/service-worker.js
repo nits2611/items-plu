@@ -1,4 +1,4 @@
-const CACHE="my-produce-assistant-v52.1.4-mobile-layout-clearance";
+const CACHE="my-produce-assistant-v52.1.6-barcode-renderer";
 const SHELL=[
   "./",
   "./index.html",

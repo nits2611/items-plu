@@ -1,3 +1,12 @@
+# v52.1.6 — Barcode Renderer v2
+
+- Added one shared Code 128 renderer under `src/core/barcode/BarcodeRenderer.js`.
+- Standardized barcode display width and height across product and order cards.
+- Preserved Code 128 bar/module ratios while scaling the complete symbol consistently.
+- Kept human-readable code text separate from the SVG so text is not distorted.
+- Preserved the manually verified mobile Lookup drawer clearance (`bottom: 71px`).
+- No barcode viewer, long-press menu, or Lookup redesign is included in this step.
+
 # v52.1.3 — Final Order quick placement + Lookup drawer clearance
 
 - Added a direct **Place Order** button to the Final Order screen.

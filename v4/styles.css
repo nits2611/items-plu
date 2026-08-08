@@ -2211,3 +2211,108 @@ button:not(.tab):not(.mobile-more-tab):not(.drawer-btn):not(.section-info-btn):f
     )!important;
   }
 }
+
+/* ==========================================================================
+   v52.1.5 Barcode Renderer v2
+   Shared, consistent barcode presentation. Barcode patterns keep their Code
+   128 module ratios while the complete symbol scales into one display area.
+   ========================================================================== */
+.barcode{
+  overflow:hidden!important;
+}
+.barcode-render{
+  width:min(100%,280px);
+  margin:0 auto;
+  display:grid;
+  grid-template-rows:58px auto;
+  gap:5px;
+  align-items:center;
+  justify-items:stretch;
+  background:#fff;
+}
+.barcode-render__bars{
+  display:block;
+  width:100%;
+  height:58px;
+  min-width:0;
+  overflow:visible;
+  shape-rendering:crispEdges;
+}
+.barcode-render__value{
+  width:100%;
+  color:#111;
+  text-align:center;
+  font-family:Arial,Helvetica,sans-serif;
+  font-size:.82rem;
+  line-height:1.15;
+  font-weight:800;
+  letter-spacing:.04em;
+  overflow-wrap:anywhere;
+}
+@media(max-width:420px){
+  .barcode-render{width:min(100%,250px);grid-template-rows:54px auto}
+  .barcode-render__bars{height:54px}
+}
+
+/* ==========================================================================\n   v52.1.6 Barcode presentation polish\n   Keep a consistent professional panel while allowing the encoded symbol to\n   use a scanner-friendly natural width inside it.\n   ========================================================================== */
+.barcode{
+  margin:0 10px 10px!important;
+  padding:0!important;
+  min-height:102px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden!important;
+  border:1px solid #dce3e6!important;
+  border-radius:11px!important;
+  background:linear-gradient(180deg,#fff 0%,#fcfdfd 100%)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.85);
+}
+.barcode-render{
+  width:100%!important;
+  min-width:0;
+  margin:0!important;
+  padding:10px 14px 8px;
+  display:flex!important;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:6px!important;
+  background:transparent!important;
+}
+.barcode-render__bars{
+  width:min(var(--barcode-symbol-width,260px),92%)!important;
+  height:58px!important;
+  min-width:0;
+  flex:0 0 58px;
+  display:block;
+  overflow:visible;
+  shape-rendering:crispEdges;
+}
+.barcode-render__value{
+  position:static!important;
+  display:block!important;
+  width:auto!important;
+  min-height:17px;
+  margin:0!important;
+  padding:0 8px;
+  color:#111!important;
+  background:#fff;
+  text-align:center;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace!important;
+  font-size:.82rem!important;
+  line-height:1.2!important;
+  font-weight:800!important;
+  letter-spacing:.08em!important;
+  border-radius:4px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  z-index:1;
+}
+@media(max-width:420px){
+  .barcode{min-height:94px}
+  .barcode-render{padding:9px 10px 7px}
+  .barcode-render__bars{height:52px!important;flex-basis:52px;width:min(var(--barcode-symbol-width,240px),94%)!important}
+  .barcode-render__value{font-size:.78rem!important}
+}
