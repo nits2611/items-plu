@@ -1,0 +1,432 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#087763"><title>My Produce Assistant</title><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/icon-192.png"><link rel="stylesheet" href="styles.css">
+<style id="organic-inline-style">
+.organic-inline{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+  font-size:.9rem;
+  font-weight:800;
+}
+.organic-label{
+  min-width:auto;
+}
+.radio-inline{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-weight:700;
+}
+.radio-inline input{
+  margin:0;
+}
+@media(max-width:540px){
+  .organic-inline{
+    gap:10px;
+    font-size:.88rem;
+  }
+}
+</style>
+
+</head><body class="ui-shell-v52">
+<div id="appUpdateBanner" class="app-update-banner" role="status" hidden>
+  <div class="app-update-banner-copy">
+    <span class="app-update-banner-icon" aria-hidden="true">↻</span>
+    <div>
+      <strong id="appUpdateMessage">A new app version is available.</strong>
+      <small>Update to load the latest JavaScript, CSS, and interface changes.</small>
+    </div>
+  </div>
+  <div class="app-update-banner-actions">
+    <button id="appUpdateBtn" type="button">Update now</button>
+    <button id="dismissAppUpdateBtn" class="app-update-dismiss" type="button" aria-label="Dismiss app update">Later</button>
+  </div>
+</div>
+<header class="app-topbar">
+  <button id="drawerBtn" class="drawer-btn" type="button" aria-label="Open navigation menu">☰</button>
+  <div class="app-brand">
+    <span class="app-brand-mark" aria-hidden="true">🌿</span>
+    <div class="app-brand-copy"><h1>My Produce Assistant</h1><p>Produce workflow, simplified.</p></div>
+  </div>
+  <div class="header-actions">
+    <span id="headerOnlineStatus" class="header-status" aria-label="Connection status"><span class="status-dot"></span><span class="header-status-text">Online</span></span>
+    <button id="installBtn" class="header-install-btn" hidden>Install</button>
+  </div>
+</header>
+
+<div id="drawerBackdrop" class="drawer-backdrop" hidden></div>
+<aside id="appDrawer" class="app-drawer" aria-hidden="true">
+  <div class="drawer-head">
+    <div class="drawer-brand"><span class="drawer-brand-mark">🌿</span><div><strong>My Produce Assistant</strong><small>Produce workflow, simplified.</small></div></div>
+    <button id="closeDrawerBtn" type="button" aria-label="Close menu">✕</button>
+  </div>
+  <nav class="drawer-nav" aria-label="Primary navigation">
+    <div class="drawer-group-title">Daily</div>
+    <button type="button" data-drawer-action="dashboard"><span class="drawer-icon">⌂</span><span>Home</span></button>
+    <button type="button" data-drawer-action="lookup"><span class="drawer-icon">⌕</span><span>Lookup</span></button>
+    <button type="button" data-drawer-action="back-stock"><span class="drawer-icon">▣</span><span>Back Stock</span></button>
+    <button type="button" data-drawer-action="final-order"><span class="drawer-icon">▤</span><span>Final Order</span></button>
+    <button type="button" data-drawer-action="favorites"><span class="drawer-icon">★</span><span>Favorites</span></button>
+    <button type="button" data-drawer-action="recent"><span class="drawer-icon">◷</span><span>Recent</span></button>
+    <div class="drawer-group-title">Work</div>
+    <button type="button" data-drawer-action="orders"><span class="drawer-icon">▦</span><span>Order History</span></button>
+    <button type="button" data-drawer-action="inventory"><span class="drawer-icon">◫</span><span>Inventory</span></button>
+    <button type="button" data-drawer-action="missing"><span class="drawer-icon">?</span><span>Missing Items</span></button>
+    <button type="button" data-drawer-action="archive"><span class="drawer-icon">▥</span><span>Archive</span></button>
+    <div class="drawer-group-title">Settings</div>
+    <button type="button" data-drawer-action="data-tools"><span class="drawer-icon">⚙</span><span>Data &amp; Backup</span></button>
+  </nav>
+  <div class="drawer-footer"><span class="drawer-version">v52.1.3</span><span class="drawer-online"><i></i> Online</span></div>
+</aside>
+
+
+<nav class="tabs" aria-label="Quick navigation">
+  <button class="tab" data-view="dashboard"><span class="tab-icon">⌂</span><span class="tab-text">Home</span></button>
+  <button class="tab active" data-view="lookup"><span class="tab-icon">⌕</span><span class="tab-text">Lookup</span></button>
+  <button class="tab" data-view="order"><span class="tab-icon">▣</span><span class="tab-text">Back Stock</span></button>
+  <button class="tab" data-view="frontStock"><span class="tab-icon">▤</span><span class="tab-text">Order</span></button>
+  <button id="mobileMoreBtn" class="mobile-more-tab" type="button"><span class="tab-icon">•••</span><span class="tab-text">More</span></button>
+</nav>
+<div id="lookupFixedHeader" class="fixed-page-title lookup-fixed-title" hidden>
+  <strong>Lookup</strong>
+  <button id="lookupInfoBtn" class="section-info-btn" type="button" aria-label="Lookup info">i</button>
+</div>
+
+<main>
+<section id="lookupView" class="view active">
+<section class="panel"><button id="closeSearchDrawerBtn" class="close-search-drawer" type="button" aria-label="Close search">✕</button>
+      <div class="search-header"><label for="q">Search</label><span id="count">Loading...</span></div><div class="search-box"><input id="q" type="search" placeholder="banana, eb spinach, 4011, Taylor, 340 g..." autocomplete="off" autofocus><button id="scanBtn" class="scan-btn" type="button" title="Scan barcode">📷</button>
+        <button id="advancedToggle" class="filter-btn" type="button" aria-expanded="false" title="Filters & tools">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M3 5H21L14 13V19L10 21V13L3 5Z"></path>
+          </svg>
+        </button></div><div id="advancedControls" class="advanced-controls" hidden><div class="filters"><button class="active" data-filter="all" type="button">All</button><button data-filter="produce" type="button">Produce</button><button data-filter="packaged" type="button">Packaged</button><button data-filter="organic" type="button">Organic</button>
+          <button data-filter="seasonal" type="button">Seasonal</button></div></div></section><section id="message" class="message" hidden></section><section id="results" class="results"></section></section>
+<section id="favoritesView" class="view"><section class="panel section-head"><h2>Favorites</h2><p>Store-specific quick list. Tap ☆ on any item to add/remove.</p></section><section id="favoritesResults" class="results"></section></section>
+<section id="recentView" class="view"><section class="panel section-head"><h2>Recently Used</h2><p>Automatically updated when you scan, copy, add to order, or open Save-On.</p><button id="clearRecentBtn" class="link" type="button">Clear Recent</button></section><section id="recentResults" class="results"></section></section>
+<section id="orderView" class="view"><section class="panel section-head"><h2>Back Stock</h2><p>Record what you already have in back stock. Use this while preparing your store order.</p><div class="order-actions"><button id="exportOrderBtn" type="button">Export CSV</button><button id="clearOrderBtn" class="danger" type="button">Clear List</button>
+        <button id="startFrontStockBtn" type="button">Final Order →</button></div></section><section id="orderResults" class="order-list"></section></section>
+
+  <section id="missingView" class="view">
+    <section class="panel section-head">
+      <h2>Missing Items</h2>
+      <p>Saved searches or scanned codes that were not found in your local CSV.</p>
+      <div class="order-actions">
+        <button id="addMissingToCatalogBtn" type="button">Add to Catalog</button>
+        <button id="archiveMissingBtn" type="button">Archive</button>
+        <button id="exportMissingBtn" type="button">Export CSV</button>
+        <label class="upload">Import CSV <input id="importMissingCsv" type="file" accept=".csv,text/csv" hidden></label>
+        <button id="clearMissingBtn" class="danger" type="button">Clear Missing</button>
+      </div>
+    </section>
+    <section id="missingResults" class="order-list"></section>
+  </section>
+
+  <section id="archiveView" class="view">
+    <section class="panel section-head">
+      <h2>Archive</h2>
+      <p>Archived catalog items are hidden from normal search. Restore when needed.</p>
+      <div class="order-actions"><button id="exportArchiveBtn" type="button">Export CSV</button></div>
+    </section>
+    <section id="archiveResults" class="results"></section>
+  </section>
+  <section id="dataToolsView" class="view data-tools-view">
+    <section class="panel section-head data-tools-page-head">
+      <div class="data-tools-title-row">
+        <button id="dataToolsBackBtn" class="page-back-btn" type="button" aria-label="Go back">←</button>
+        <div>
+          <h2>Data &amp; Backup</h2>
+          <p>Import, export, restore, and maintain the catalog stored on this device.</p>
+        </div>
+      </div>
+      <span id="syncStatus" class="sync-status data-tools-status">Ready</span>
+    </section>
+
+    <section class="data-tools-section catalog-update-section" aria-labelledby="catalogUpdateTitle">
+      <div class="data-tools-section-heading catalog-update-heading">
+        <div>
+          <h3 id="catalogUpdateTitle">Catalog Updates</h3>
+          <p>The app checks a small version file only. Product data downloads only after you choose Update Catalog.</p>
+        </div>
+        <button id="checkCatalogUpdateBtn" class="compact-secondary-button" type="button">Check again</button>
+      </div>
+      <div id="catalogUpdateCard" class="catalog-update-card" data-status="checking">
+        <div class="catalog-update-icon" aria-hidden="true">↻</div>
+        <div class="catalog-update-copy">
+          <strong id="catalogUpdateMessage">Checking for catalog updates...</strong>
+          <div class="catalog-version-row">
+            <span>Local: <b id="localCatalogVersion">—</b></span>
+            <span>Available: <b id="remoteCatalogVersion">—</b></span>
+          </div>
+          <small id="catalogUpdateDate"></small>
+        </div>
+        <button id="updateCatalogBtn" class="catalog-update-button" type="button" hidden>Update Catalog</button>
+      </div>
+    </section>
+
+    <section class="data-tools-section" aria-labelledby="catalogImportTitle">
+      <div class="data-tools-section-heading">
+        <div>
+          <h3 id="catalogImportTitle">Catalog Import</h3>
+          <p>Choose whether to preserve your current catalog or replace it.</p>
+        </div>
+      </div>
+      <div class="data-tools-card-grid import-card-grid">
+        <article class="data-tool-card primary-tool-card">
+          <div class="data-tool-card-icon" aria-hidden="true">➕</div>
+          <div class="data-tool-card-copy">
+            <h4>Add &amp; Merge CSV</h4>
+            <p>Add new products and update matching products. Existing products not included in the file remain unchanged.</p>
+          </div>
+          <label class="data-tool-action primary-action">
+            Choose CSV
+            <input id="csvMergeUpload" type="file" accept=".csv,text/csv" hidden>
+          </label>
+        </article>
+
+        <article class="data-tool-card danger-tool-card">
+          <div class="data-tool-card-topline">
+            <div class="data-tool-card-icon" aria-hidden="true">↻</div>
+            <button id="replaceCatalogInfoBtn" class="section-info-btn" type="button" aria-label="Replace catalog information">i</button>
+          </div>
+          <div class="data-tool-card-copy">
+            <h4>Replace Local Catalog</h4>
+            <p>Replace this device's local catalog with the selected file. Products missing from the CSV will be removed locally.</p>
+          </div>
+          <label class="data-tool-action danger-action">
+            Replace Catalog
+            <input id="csvReplaceUpload" type="file" accept=".csv,text/csv" hidden>
+          </label>
+        </article>
+      </div>
+    </section>
+
+    <section class="data-tools-section" aria-labelledby="exportBackupTitle">
+      <div class="data-tools-section-heading">
+        <div>
+          <h3 id="exportBackupTitle">Export &amp; Backup</h3>
+          <p>Save catalog data or transfer your local profile.</p>
+        </div>
+      </div>
+      <div class="data-tools-action-grid">
+        <button id="exportItemsBtn" class="data-tools-action-button" type="button"><span aria-hidden="true">📄</span><strong>Export Items CSV</strong><small>Download the current local catalog.</small></button>
+        <button id="exportProfileBtn" class="data-tools-action-button" type="button"><span aria-hidden="true">💾</span><strong>Export Profile</strong><small>Back up local app preferences and lists.</small></button>
+        <label class="data-tools-action-button data-tools-file-button"><span aria-hidden="true">📥</span><strong>Import Profile</strong><small>Restore a previously exported profile.</small><input id="importProfile" type="file" accept=".json,application/json" hidden></label>
+      </div>
+    </section>
+
+    <section class="data-tools-section maintenance-section" aria-labelledby="maintenanceTitle">
+      <div class="data-tools-section-heading">
+        <div>
+          <h3 id="maintenanceTitle">Maintenance</h3>
+          <p>Use these actions only when you need to recover or refresh local data.</p>
+        </div>
+      </div>
+      <button id="resetBtn" class="maintenance-reset-button" type="button"><span aria-hidden="true">⟲</span><span><strong>Reset Catalog Data</strong><small>Restore the bundled catalog included with the app.</small></span></button>
+    </section>
+  </section>
+
+  <section id="frontStockView" class="view">
+    <section class="panel section-head">
+      <h2>Final Order</h2>
+      <div class="order-actions">
+        <button id="exportFrontStockBtn" type="button">Export CSV</button>
+        <button id="exportCombinedStockBtn" type="button">Export Combined</button>
+        <button id="clearFrontStockBtn" class="danger" type="button">Clear List</button>
+        <button id="backToBackStockBtn" type="button">← Back Stock</button>
+        <button id="finalPlaceOrderBtn" class="place-order-action" type="button">Place Order</button>
+      </div>
+    </section>
+    <section class="panel front-stock-toolbar">
+      <label>Search / Scan Item
+        <div class="search-box front-search-box">
+          <input id="frontQ" type="search" placeholder="Search item, PLU, UPC, brand...">
+          <button id="frontScanBtn" class="scan-btn" type="button" title="Scan barcode">📷</button>
+        </div>
+      </label>
+      <section id="frontSearchResults" class="front-results"></section>
+    </section>
+    <section id="frontStockResults" class="order-list"></section>
+  </section>
+  <section id="dashboardView" class="view dashboard-view-v521">
+    <section class="dashboard-hero">
+      <div>
+        <span class="dashboard-eyebrow" id="dashBusinessDate">Today</span>
+        <h2 id="dashGreeting">Welcome back</h2>
+        <p>Here’s what needs your attention today.</p>
+      </div>
+      <span id="dashHeroStatus" class="dashboard-status-pill status-draft">Draft</span>
+    </section>
+
+    <section class="dashboard-layout-primary">
+      <article class="dashboard-order-card">
+        <div class="dashboard-card-head">
+          <div>
+            <span class="dashboard-card-kicker">TODAY’S ORDER</span>
+            <h3>Order progress</h3>
+          </div>
+          <button id="dashGoOrderBtn" class="dashboard-link-btn" type="button">View workflow →</button>
+        </div>
+
+        <div class="dashboard-order-metrics">
+          <button id="dashGoStockBtn" class="dashboard-metric" type="button">
+            <span class="dashboard-metric-icon">▣</span>
+            <span><b id="dashBackCount">0</b><small>Back Stock items</small></span>
+          </button>
+          <button id="dashGoFinalBtn" class="dashboard-metric" type="button">
+            <span class="dashboard-metric-icon">☷</span>
+            <span><b id="dashFinalCount">0</b><small>Final Order items</small></span>
+          </button>
+        </div>
+
+        <div class="dashboard-progress" aria-label="Order progress">
+          <div class="dashboard-progress-step is-active" data-dash-step="back"><span>1</span><small>Back Stock</small></div>
+          <div class="dashboard-progress-line"></div>
+          <div class="dashboard-progress-step" data-dash-step="final"><span>2</span><small>Final Order</small></div>
+          <div class="dashboard-progress-line"></div>
+          <div class="dashboard-progress-step" data-dash-step="placed"><span>3</span><small>Placed</small></div>
+        </div>
+
+        <div class="dashboard-order-actions">
+          <button id="dashContinuePrimaryBtn" class="dashboard-primary-action" type="button">Continue Back Stock</button>
+          <button id="dashMarkPlacedBtn" class="dashboard-secondary-action" type="button">Place Order</button>
+        </div>
+      </article>
+
+      <article class="dashboard-quick-card">
+        <div class="dashboard-card-head">
+          <div><span class="dashboard-card-kicker">QUICK ACCESS</span><h3>Daily tools</h3></div>
+        </div>
+        <div class="dashboard-quick-grid">
+          <button id="dashGoLookupBtn" class="dashboard-quick-action is-green" type="button"><span>⌕</span><b>Lookup</b><small>Find any product</small></button>
+          <button id="dashQuickBackStockBtn" class="dashboard-quick-action is-orange" type="button"><span>▣</span><b>Back Stock</b><small>Count today’s stock</small></button>
+          <button id="dashQuickOrderBtn" class="dashboard-quick-action is-purple" type="button"><span>☷</span><b>Final Order</b><small>Prepare the order</small></button>
+          <button id="dashGoRecentBtn" class="dashboard-quick-action is-blue" type="button"><span>◷</span><b>Recent</b><small>Open recent items</small></button>
+        </div>
+      </article>
+    </section>
+
+    <section class="dashboard-layout-secondary">
+      <article class="dashboard-info-card">
+        <div class="dashboard-card-head">
+          <div><span class="dashboard-card-kicker">NEEDS ATTENTION</span><h3>Things to review</h3></div>
+        </div>
+        <div id="dashAttentionList" class="dashboard-attention-list"></div>
+      </article>
+
+      <article class="dashboard-info-card">
+        <div class="dashboard-card-head">
+          <div><span class="dashboard-card-kicker">RECENT PRODUCTS</span><h3>Quickly return to items</h3></div>
+          <button id="dashViewAllRecentBtn" class="dashboard-link-btn" type="button">View all →</button>
+        </div>
+        <div id="dashRecentProducts" class="dashboard-recent-products"></div>
+      </article>
+    </section>
+
+    <section class="dashboard-info-card dashboard-history-card">
+      <div class="dashboard-card-head">
+        <div><span class="dashboard-card-kicker">ORDER HISTORY</span><h3>Recent days</h3></div>
+        <button id="dashGoHistoryBtn" class="dashboard-link-btn" type="button">View all →</button>
+      </div>
+      <div id="dashRecentOrders" class="dashboard-recent-orders"></div>
+    </section>
+  </section>
+
+  <section id="ordersView" class="view">
+<section class="panel section-head"><h2>Orders</h2><p>Today's regular order workflow: record back stock, prepare final order, then mark it placed.</p><div class="order-actions"><button id="continueOrderBtn" type="button">Continue</button><button id="markOrderPlacedBtn" type="button">Mark Placed</button><button id="unlockOrderBtn" type="button">Adjust Order</button></div></section>
+<section class="dashboard-grid"><article class="dashboard-card"><h3>Status</h3><p><span id="orderSessionStatus">Draft</span></p><button id="ordersQuickMarkPlacedBtn" type="button">Mark Placed</button></article><article class="dashboard-card"><h3>Back Stock</h3><p><span id="orderBackCount">0</span> items</p><button id="ordersBackStockBtn" type="button">Open Back Stock</button></article><article class="dashboard-card"><h3>Final Order</h3><p><span id="orderFinalCount">0</span> items</p><button id="ordersFinalOrderBtn" type="button">Open Final Order</button></article></section><section id="ordersHistoryInline" class="order-history-list"></section></section>
+<section id="inventoryView" class="view"><section class="panel section-head"><h2>Inventory</h2><p>Future inventory workflow: separate back stock count and final order count.</p></section><section class="message">Inventory module is planned after the order workflow is stable.</section></section>
+</main>
+
+<button id="mobileSearchFab" class="mobile-search-fab" type="button" aria-label="Open search">
+  🔍
+</button>
+<div id="scannerModal" class="scanner-modal" hidden><div class="scanner-card"><div class="scanner-head"><h2>Scan Barcode</h2><button id="closeScannerBtn" type="button">Close</button></div><div id="scannerViewport" class="scanner-viewport"><video id="scannerVideo" playsinline></video><div class="scanner-guide" aria-hidden="true"></div><div id="scannerDetectionBox" class="scanner-detection-box" aria-hidden="true"><span>Detected</span></div></div><p id="scannerStatus">Point camera at barcode.</p></div></div>
+
+<div id="missingModal" class="missing-modal" hidden>
+  <div class="missing-card">
+    <div class="missing-head">
+      <h2>Missing Item Details</h2>
+      <button id="closeMissingModalBtn" type="button">Close</button>
+    </div>
+
+    <form id="missingForm" class="missing-form">
+      <input type="hidden" id="missingEditIndex">
+
+      <label>Search / Scanned Value
+        <input id="missingTerm" type="text" readonly>
+      </label>
+
+      <label>Item Name
+        <input id="missingName" type="text" placeholder="Example: Earthbound Baby Arugula">
+      </label>
+
+      <label>Brand
+        <input id="missingBrand" type="text" placeholder="Example: Earthbound Farm">
+      </label>
+
+      <div class="form-grid">
+        <label>Quantity
+          <input id="missingQuantity" type="text" placeholder="142">
+        </label>
+
+        <label>Unit
+          <select id="missingUnit">
+            <option value="">Select</option>
+            <option value="g">g</option>
+            <option value="kg">kg</option>
+            <option value="ml">ml</option>
+            <option value="L">L</option>
+            <option value="oz">oz</option>
+            <option value="lb">lb</option>
+            <option value="each">each</option>
+            <option value="pack">pack</option>
+            <option value="case">case</option>
+          </select>
+        </label>
+      </div>
+
+      <label>Category
+        <input id="missingCategory" type="text" placeholder="Packaged Greens / Herbs / Dips">
+      </label>
+
+      <div class="organic-inline">
+        <span class="organic-label">Type:</span>
+        <label class="radio-inline">
+          <input type="radio" name="missingOrganic" value="Conventional" checked>
+          Conventional
+        </label>
+        <label class="radio-inline">
+          <input type="radio" name="missingOrganic" value="Organic">
+          Organic
+        </label>
+      </div>
+
+      <div class="seasonal-inline">
+        <label class="checkbox-inline"><input id="missingSeasonal" type="checkbox"> Seasonal item</label>
+      </div>
+      <div class="form-grid seasonal-fields">
+        <label>Season <input id="missingSeason" type="text" placeholder="Summer / Fall / Winter"></label>
+        <label>Festival <input id="missingFestival" type="text" placeholder="Halloween / Valentine"></label>
+      </div>
+      <label>Image URL
+        <input id="missingImageUrl" type="url" placeholder="https://example.com/product.jpg">
+      </label>
+
+      <label>Local Image Path
+        <input id="missingImageLocal" type="text" placeholder="images/product-name.jpg">
+      </label>
+
+      <label>Notes
+        <textarea id="missingNotes" rows="3" placeholder="Optional notes"></textarea>
+      </label>
+
+      <div class="missing-actions">
+        <button type="submit">Save Missing Item</button>
+        <a id="missingSaveOnLink" class="button-link" target="_blank" rel="noopener">Check Save-On</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<footer>Local-first catalog with user-controlled remote updates.</footer><script src="data.js"></script><script src="src/core/config/AppConfig.js"></script><script src="src/core/logging/Logger.js"></script><script src="src/core/utils/UrlUtils.js"></script><script src="src/core/http/HttpClient.js"></script><script src="src/core/storage/LocalStorageClient.js"></script><script src="src/core/storage/IndexedDbClient.js"></script><script src="src/core/router/Router.js"></script><script src="src/core/update/AppUpdateManager.js"></script><script src="src/app.js"></script><script src="js/providers/LocalCatalogProvider.js"></script><script src="js/providers/GoogleSheetsCatalogProvider.js"></script><script src="js/services/CatalogService.js"></script><script src="src/modules/products/providers/LegacyCatalogProductProvider.js"></script><script src="src/modules/products/providers/StaticCatalogVersionProvider.js"></script><script src="src/modules/products/providers/IndexedDbProductProvider.js"></script><script src="src/modules/products/ProductRepository.js"></script><script src="src/modules/products/ProductService.js"></script><script src="src/modules/products/ProductView.js"></script><script src="src/modules/products/ProductController.js"></script><script src="src/modules/orders/LocalOrderSessionStore.js"></script><script src="app.js"></script></body></html>
