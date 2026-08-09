@@ -3,7 +3,7 @@
 ## Current Sprint — Barcode UX Pack
 
 - [x] Barcode Renderer v2 — shared, consistent scanner-safe presentation
-- [ ] Large Barcode Viewer — tap barcode to open focus mode
+- [x] Large Barcode Viewer — tap barcode to open focus mode
 - [ ] Long-Press Barcode Menu — large barcode / copy code / product details placeholder
 - [ ] Verify shared barcode component across all relevant screens
 

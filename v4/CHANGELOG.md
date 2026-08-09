@@ -1,3 +1,21 @@
+# v52.1.8 — Barcode Long-Press Options
+
+- Added long press / right-click barcode options.
+- Added Show Large Barcode and Copy Product Code actions.
+- Product Details is reserved as Coming Soon.
+- Added smooth open/close transitions for the large barcode viewer.
+- Long press cancels when the user scrolls or moves the pointer.
+- Normal tap remains dedicated to the large barcode viewer.
+
+# v52.1.7 — Large Barcode Viewer
+
+- Added full-screen barcode focus mode on a single tap.
+- Uses a darkened backdrop and bright white barcode panel to reduce visual distraction for external price-gun scanning.
+- Reuses the shared Barcode Renderer v2 with larger scanner-safe dimensions.
+- Tap outside, use the Close button, or press Escape to exit.
+- Barcode elements are keyboard-focusable and can open with Enter/Space.
+- No long-press menu, swipe navigation, auto-close, or Lookup redesign in this release.
+
 # v52.1.6 — Barcode Renderer v2
 
 - Added one shared Code 128 renderer under `src/core/barcode/BarcodeRenderer.js`.

@@ -1,4 +1,4 @@
-const CACHE="my-produce-assistant-v52.1.6-barcode-renderer";
+const CACHE="my-produce-assistant-v52.1.8-barcode-options";
 const SHELL=[
   "./",
   "./index.html",
@@ -27,6 +27,8 @@ const SHELL=[
   "./src/modules/products/ProductView.js",
   "./src/modules/products/ProductController.js",
   "./src/modules/orders/LocalOrderSessionStore.js",
+  "./src/core/barcode/BarcodeRenderer.js",
+  "./src/core/barcode/BarcodeViewer.js",
   "./manifest.webmanifest",
   "./items.csv",
   "./icons/icon-192.png",

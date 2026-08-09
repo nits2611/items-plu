@@ -73,8 +73,10 @@
     const root=document.createElement("div");
     root.className="barcode-render";
     root.dataset.barcode=text;
-    root.setAttribute("role","img");
-    root.setAttribute("aria-label",`Barcode ${text}`);
+    root.setAttribute("role","button");
+    root.setAttribute("tabindex","0");
+    root.setAttribute("aria-label",`Open large barcode ${text}`);
+    root.setAttribute("title","Tap to enlarge barcode");
     root.style.setProperty("--barcode-symbol-width",`${symbolWidth}px`);
 
     const svg=document.createElementNS(SVG_NS,"svg");
