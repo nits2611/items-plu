@@ -223,7 +223,7 @@ function renderNotFound(term) {
   count.textContent = clean ? "0 found" : `${items.length} items`;
 }
 
-function renderLookup(){const a=getResults();results.innerHTML="";count.textContent=q.value.trim()?`${a.length} found`:`${items.length} items`;if(!a.length){renderNotFound(q.value.trim());return}hide();const f=document.createDocumentFragment();a.forEach(x=>f.appendChild(card(x)));results.appendChild(f)}
+function renderLookup(){const a=getResults();results.innerHTML="";count.textContent=q.value.trim()?`${a.length} found`:`${items.length} items`;if(!a.length){renderNotFound(q.value.trim());return}hide();const f=document.createDocumentFragment();a.forEach(x=>f.appendChild(card(x,"lookup")));results.appendChild(f)}
 function renderFavorites(){const box=document.getElementById("favoritesResults");box.innerHTML="";const a=byCodes(favs());if(!a.length){box.innerHTML='<section class="message">No favorites yet. Tap ☆ on an item.</section>';return}a.forEach(x=>box.appendChild(card(x)))}
 function renderRecent(){const box=document.getElementById("recentResults");box.innerHTML="";const a=byCodes(recents());if(!a.length){box.innerHTML='<section class="message">No recent items yet.</section>';return}a.forEach(x=>box.appendChild(card(x)))}
 function renderOrder(){
@@ -284,7 +284,131 @@ function renderMissing() {
   });
 }
 
-function card(x) {
+function productImages(item){return window.ImageLibrary?.normalizeImages(item)||[]}
+function primaryProductImage(item){return window.ImageLibrary?.primaryImage(item)||""}
+function attachImageGallery(target,item){
+  if(!target)return;
+  const images=productImages(item);
+  if(!images.length)return;
+  target.classList.add("has-gallery");
+  target.setAttribute("role","button");
+  target.setAttribute("tabindex","0");
+  target.setAttribute("aria-label",`View ${images.length>1?images.length+" images":"image"} for ${item.item_name||"product"}`);
+  const open=event=>{event?.preventDefault?.();event?.stopPropagation?.();window.ImageGallery?.open({images,title:item.item_name||"Product"})};
+  target.addEventListener("click",open);
+  target.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();open(event)}});
+}
+
+function lookupCard(x) {
+  const e = document.createElement("article");
+  e.className = "lookup-product-card" + (isOrg(x) ? " is-organic" : "");
+  const existingQty = getOrderQty(x.code);
+
+  e.innerHTML = `<div class="lookup-product-main">
+    <div class="lookup-product-image"><div class="thumb placeholder">No image</div></div>
+    <div class="lookup-product-copy">
+      <div class="lookup-product-title-row"><h2 class="name"></h2><button class="fav lookup-fav" type="button" aria-label="Toggle favorite"></button></div>
+      <div class="lookup-product-meta"></div>
+      <div class="lookup-product-code"><span>PLU / Code</span><strong class="code"></strong></div>
+    </div>
+  </div>
+  <div class="barcode lookup-barcode"></div>
+  <div class="lookup-product-controls">
+    <div class="lookup-qty-copy"><span>Back Stock</span><small>Today's quantity</small></div>
+    <div class="lookup-qty-stepper" role="group" aria-label="Back stock quantity">
+      <button class="qty-step qty-minus" type="button" aria-label="Decrease quantity">−</button>
+      <input class="qty-input" type="number" inputmode="decimal" min="0" step="1" placeholder="0" aria-label="Back stock quantity">
+      <button class="qty-step qty-plus" type="button" aria-label="Increase quantity">+</button>
+    </div>
+    <span class="save-status" aria-live="polite"></span>
+  </div>
+  <div class="lookup-product-actions">
+    <button class="copy" type="button"><span aria-hidden="true">⧉</span> Copy code</button>
+    <a target="_blank" rel="noopener"><span aria-hidden="true">↗</span> Save-On</a>
+  </div>`;
+
+  e.querySelector(".name").textContent = x.item_name;
+  e.querySelector(".code").textContent = x.code;
+
+  const meta=e.querySelector(".lookup-product-meta");
+  const values=[x.brand,x.quantity,x.category,isOrg(x)?"Organic":"",isPackaged(x)?"Packaged":"Produce"].filter(Boolean);
+  values.forEach((value,index)=>{
+    const s=document.createElement("span");
+    s.className="lookup-meta-pill" + (value==="Organic"?" is-organic":"") + (index>1?" is-muted":"");
+    s.textContent=value;
+    meta.appendChild(s);
+  });
+
+  const src=primaryProductImage(x);
+  if(src){
+    const img=document.createElement("img");
+    img.className="thumb";
+    img.alt=x.item_name;
+    img.src=src;
+    img.onerror=()=>img.replaceWith(placeholder());
+    e.querySelector(".thumb").replaceWith(img);
+    attachImageGallery(img,x);
+  }
+
+  window.BarcodeRenderer.render(e.querySelector(".lookup-barcode"),x.code);
+
+  const fav=e.querySelector(".lookup-fav");
+  const updateFav=()=>{
+    const on=isFav(x.code);
+    fav.textContent=on?"★":"☆";
+    fav.classList.toggle("fav-on",on);
+    fav.setAttribute("aria-label",on?"Remove from favorites":"Add to favorites");
+  };
+  updateFav();
+  fav.onclick=()=>toggleFav(x.code);
+
+  const qtyInput=e.querySelector(".qty-input");
+  const saveStatus=e.querySelector(".save-status");
+  qtyInput.value=existingQty||"";
+  if(existingQty){saveStatus.textContent="Saved";saveStatus.classList.add("saved")}
+
+  let saveTimer=null;
+  const saveQuantity=(immediate=false)=>{
+    clearTimeout(saveTimer);
+    const qty=qtyInput.value.trim();
+    const persist=()=>{
+      addOrder(x,qty,true);
+      if(qty && Number(qty)>0){saveStatus.textContent="Saved";saveStatus.classList.add("saved")}
+      else{saveStatus.textContent="";saveStatus.classList.remove("saved")}
+    };
+    if(immediate){persist();return}
+    saveStatus.textContent=qty&&Number(qty)>0?"Saving...":"Removed";
+    saveStatus.classList.remove("saved");
+    saveTimer=setTimeout(persist,400);
+  };
+  qtyInput.addEventListener("input",()=>saveQuantity(false));
+  qtyInput.addEventListener("change",()=>saveQuantity(true));
+  e.querySelector(".qty-minus").onclick=()=>{
+    const next=Math.max(0,(Number(qtyInput.value)||0)-1);
+    qtyInput.value=next===0?"":String(next);
+    saveQuantity(true);
+  };
+  e.querySelector(".qty-plus").onclick=()=>{
+    qtyInput.value=String((Number(qtyInput.value)||0)+1);
+    saveQuantity(true);
+  };
+
+  const copy=e.querySelector(".copy");
+  copy.onclick=async()=>{
+    try{await navigator.clipboard.writeText(x.code)}catch{}
+    touch(x.code);
+    copy.innerHTML='<span aria-hidden="true">✓</span> Copied';
+    setTimeout(()=>copy.innerHTML='<span aria-hidden="true">⧉</span> Copy code',900);
+    renderRecent();
+  };
+  const link=e.querySelector("a");
+  link.href=SAVE_ON_BASE+encodeURIComponent(x.code);
+  link.onclick=()=>touch(x.code);
+  return e;
+}
+
+function card(x, variant="default") {
+  if (variant === "lookup") return lookupCard(x);
   const e = document.createElement("article");
   e.className = "card " + (isOrg(x) ? "org" : "");
   const existingQty = getOrderQty(x.code);
@@ -350,7 +474,7 @@ function card(x) {
     }
   });
 
-  const src = x.image_local || x.image_url;
+  const src = primaryProductImage(x);
   if (src) {
     const img = document.createElement("img");
     img.className = "thumb";
@@ -358,6 +482,7 @@ function card(x) {
     img.src = src;
     img.onerror = () => img.replaceWith(placeholder());
     e.querySelector(".thumb").replaceWith(img);
+    attachImageGallery(img,x);
   }
 
   window.BarcodeRenderer.render(e.querySelector(".barcode"),x.code);
@@ -559,6 +684,7 @@ if (importMissingCsv) {
         unit: row.unit || "",
         category: row.category || "",
         organic: row.organic || row.type_quality || row.organic_type || "",
+        images: window.ImageLibrary?.normalizeImages(row) || [],
         image_url: row.image_url || row.imageUrl || "",
         image_local: row.image_local || row.image || "",
         notes: row.notes || row.note || "",
@@ -626,6 +752,17 @@ initTopTools();
 initAdvancedToggle();loadInitialData();
 
 
+/* v52.2.2 Missing item multi-image editor */
+const missingImageEditor = window.ImageListEditor?.create({
+  root: "#missingImagesEditor",
+  input: "[data-image-input]",
+  addButton: "[data-image-add]",
+  list: "[data-image-list]",
+  count: "[data-image-count]",
+  legacyUrl: "#missingImageUrl",
+  legacyLocal: "#missingImageLocal"
+});
+
 /* Missing details form v7 fixed - additive overrides */
 (function(){
   function safeGetJSON(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}}
@@ -647,8 +784,7 @@ initAdvancedToggle();loadInitialData();
     document.getElementById("missingQuantity").value = row?.quantity || "";
     document.getElementById("missingUnit").value = row?.unit || "";
     document.getElementById("missingCategory").value = row?.category || "";
-    document.getElementById("missingImageUrl").value = row?.image_url || "";
-    document.getElementById("missingImageLocal").value = row?.image_local || "";
+    missingImageEditor?.setImages(row ? (window.ImageLibrary?.normalizeImages(row) || []) : []);
     {
       const organicValue = row?.organic || "Conventional";
       document.querySelectorAll('input[name="missingOrganic"]').forEach(r => {
@@ -685,6 +821,7 @@ initAdvancedToggle();loadInitialData();
       unit: formData.unit,
       category: formData.category,
       organic: formData.organic,
+      images: window.ImageLibrary?.normalizeImages([...(formData.images||[]),formData.image_local,formData.image_url]) || [],
       image_url: formData.image_url,
       image_local: formData.image_local,
       notes: formData.notes,
@@ -790,6 +927,7 @@ initAdvancedToggle();loadInitialData();
         organic: (document.querySelector('input[name="missingOrganic"]:checked')?.value || "Conventional").trim(),
         image_url: document.getElementById("missingImageUrl").value.trim(),
         image_local: document.getElementById("missingImageLocal").value.trim(),
+        images: missingImageEditor?.getImages() || window.ImageLibrary?.normalizeImages([document.getElementById("missingImageLocal").value.trim(),document.getElementById("missingImageUrl").value.trim()]) || [],
         notes: document.getElementById("missingNotes").value.trim()
       });
     });
@@ -800,10 +938,10 @@ initAdvancedToggle();loadInitialData();
     exportBtn.onclick = () => {
       const list = (typeof missingItems === "function") ? missingItems() : safeGetJSON(storeKey("missing"), []);
       const rows = [
-        "term,item_name,brand,quantity,unit,category,organic,image_url,image_local,notes,date",
+        "term,item_name,brand,quantity,unit,category,organic,images,image_url,image_local,notes,date",
         ...list.map(x => [
           x.term || "", x.item_name || "", x.brand || "", x.quantity || "",
-          x.unit || "", x.category || "", x.organic || "", x.image_url || "", x.image_local || "", x.notes || "", x.date || ""
+          x.unit || "", x.category || "", x.organic || "", window.ImageLibrary?.serializeImages(x)||"[]", x.image_url || "", x.image_local || "", x.notes || "", x.date || ""
         ].map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
       ];
       if (typeof downloadCSV === "function") downloadCSV("missing-items.csv", rows.join("\n"));
@@ -817,11 +955,11 @@ initAdvancedToggle();loadInitialData();
   function csvEscape(v){ return `"${String(v ?? "").replaceAll('"','""')}"`; }
 
   function itemRowsToCSV(rows){
-    const headers = ["item_name","code","quantity","brand","category","type","image_local","image_url","notes","aliases","search_keywords","organic"];
+    const headers = ["item_name","code","quantity","brand","category","type","images","image_local","image_url","notes","aliases","search_keywords","organic"];
     const lines = [headers.join(",")];
     rows.forEach(r => {
       const obj = normalize ? r : r;
-      const line = headers.map(h => csvEscape(obj[h] || "")).join(",");
+      const line = headers.map(h => csvEscape(h === "images" ? (window.ImageLibrary?.serializeImages(obj.images || obj) || "[]") : (obj[h] || ""))).join(",");
       lines.push(line);
     });
     return lines.join("\n");
@@ -837,6 +975,7 @@ initAdvancedToggle();loadInitialData();
         brand:x.brand || "",
         category:x.category || "",
         type:x.type || ((String(x.code).length > 6) ? "packaged" : "produce"),
+        images:window.ImageLibrary?.serializeImages(x)||"[]",
         image_local:x.image_local || "",
         image_url:x.image_url || "",
         notes:x.notes || "",
@@ -875,6 +1014,7 @@ initAdvancedToggle();loadInitialData();
       brand,
       category,
       type: String(code).length > 6 ? "packaged" : "produce",
+      images: window.ImageLibrary?.normalizeImages(row) || [],
       image_local: row.image_local || "",
       image_url: row.image_url || "",
       notes: row.notes || "",
@@ -902,8 +1042,8 @@ initAdvancedToggle();loadInitialData();
 
     const existingCSV = currentItemsCSV();
     const newCSVLines = newRows.map(r => {
-      const headers = ["item_name","code","quantity","brand","category","type","image_local","image_url","notes","aliases","search_keywords","organic"];
-      return headers.map(h => csvEscape(r[h] || "")).join(",");
+      const headers = ["item_name","code","quantity","brand","category","type","images","image_local","image_url","notes","aliases","search_keywords","organic"];
+      return headers.map(h => csvEscape(h === "images" ? (window.ImageLibrary?.serializeImages(r.images || r) || "[]") : (r[h] || ""))).join(",");
     });
     const updatedCSV = existingCSV + "\n" + newCSVLines.join("\n");
 
@@ -958,7 +1098,7 @@ initAdvancedToggle();loadInitialData();
         row.term ? `Code/Search: ${row.term}` : ""
       ].filter(Boolean).join(" • ");
 
-      const missingImage = row.image_local || row.image_url || "";
+      const missingImage = window.ImageLibrary?.primaryImage(row) || row.image_local || row.image_url || "";
       e.innerHTML = `
         ${missingImage ? `<img class="missing-thumb" src="${String(missingImage).replaceAll('"','&quot;')}" alt="">` : ""}
         <div class="missing-row-head">
@@ -979,6 +1119,8 @@ initAdvancedToggle();loadInitialData();
         </div>
       `;
 
+      const missingThumb=e.querySelector(".missing-thumb");
+      if(missingThumb) attachImageGallery(missingThumb,row);
       const check = e.querySelector(".missing-select");
       check.value = row.term || "";
       e.querySelector("h3").textContent = title;
@@ -1031,7 +1173,7 @@ window.renderArchive=function(){const box=document.getElementById("archiveResult
 
 const oldRenderAll=renderAll;window.renderAll=function(){oldRenderAll();renderArchive()};
 
-window.currentItemsCSV=function(){const headers=["item_name","code","quantity","brand","category","type","image_local","image_url","notes","aliases","search_keywords","organic","is_archived","is_seasonal","season","festival"];const lines=[headers.join(",")];(items||[]).forEach(x=>{const search=[x.item_name,x.code,x.quantity,x.brand,x.category,x.type,x.notes,x.aliases,x.organic,x.season,x.festival].filter(Boolean).join(" ").toUpperCase();const row={item_name:x.item_name||"",code:x.code||"",quantity:x.quantity||"",brand:x.brand||"",category:x.category||"",type:x.type||((String(x.code).length>6)?"packaged":"produce"),image_local:x.image_local||"",image_url:x.image_url||"",notes:x.notes||"",aliases:x.aliases||"",search_keywords:x.hay?x.hay.toUpperCase():search,organic:x.organic||(isOrg(x)?"Organic":"Conventional"),is_archived:isArchivedItem(x)?"Yes":"",is_seasonal:isSeasonalItem(x)?"Yes":"",season:x.season||"",festival:x.festival||""};lines.push(headers.map(h=>csvEscape(row[h]||"")).join(","))});return lines.join("\n")};
+window.currentItemsCSV=function(){const headers=["item_name","code","quantity","brand","category","type","images","image_local","image_url","notes","aliases","search_keywords","organic","is_archived","is_seasonal","season","festival"];const lines=[headers.join(",")];(items||[]).forEach(x=>{const search=[x.item_name,x.code,x.quantity,x.brand,x.category,x.type,x.notes,x.aliases,x.organic,x.season,x.festival].filter(Boolean).join(" ").toUpperCase();const row={item_name:x.item_name||"",code:x.code||"",quantity:x.quantity||"",brand:x.brand||"",category:x.category||"",type:x.type||((String(x.code).length>6)?"packaged":"produce"),images:window.ImageLibrary?.serializeImages(x)||"[]",image_local:x.image_local||"",image_url:x.image_url||"",notes:x.notes||"",aliases:x.aliases||"",search_keywords:x.hay?x.hay.toUpperCase():search,organic:x.organic||(isOrg(x)?"Organic":"Conventional"),is_archived:isArchivedItem(x)?"Yes":"",is_seasonal:isSeasonalItem(x)?"Yes":"",season:x.season||"",festival:x.festival||""};lines.push(headers.map(h=>csvEscape(row[h]||"")).join(","))});return lines.join("\n")};
 
 const exportItemsBtn=document.getElementById("exportItemsBtn");if(exportItemsBtn)exportItemsBtn.onclick=()=>downloadCSV("items.csv",currentItemsCSV());
 const exportArchiveBtn=document.getElementById("exportArchiveBtn");if(exportArchiveBtn)exportArchiveBtn.onclick=()=>{const h=["item_name","code","quantity","brand","category","organic","season","festival"];const lines=[h.join(","),...(items||[]).filter(isArchivedItem).map(x=>h.map(k=>csvEscape(x[k]||"")).join(","))];downloadCSV("archived-items.csv",lines.join("\n"))};
@@ -1047,7 +1189,7 @@ renderAll();
   function csvEscape(v){ return `"${String(v ?? "").replaceAll('"','""')}"`; }
 
   function saveCurrentItemsToLocalStorage(rows){
-    const headers = ["item_name","code","quantity","brand","category","type","image_local","image_url","notes","aliases","search_keywords","organic","is_archived","is_seasonal","season","festival"];
+    const headers = ["item_name","code","quantity","brand","category","type","images","image_local","image_url","notes","aliases","search_keywords","organic","is_archived","is_seasonal","season","festival"];
     const lines = [headers.join(",")];
 
     rows.forEach(x => {
@@ -1059,6 +1201,7 @@ renderAll();
         brand:x.brand||"",
         category:x.category||"",
         type:x.type||((String(x.code).length>6)?"packaged":"produce"),
+        images:window.ImageLibrary?.serializeImages(x)||"[]",
         image_local:x.image_local||"",
         image_url:x.image_url||"",
         notes:x.notes||"",
@@ -1127,7 +1270,7 @@ renderAll();
         </div>
       `;
 
-      const src = x.image_local || x.image_url;
+      const src = primaryProductImage(x);
       if (src) {
         const img = document.createElement("img");
         img.className = "thumb";
@@ -1135,6 +1278,7 @@ renderAll();
         img.src = src;
         img.onerror = () => {};
         e.querySelector(".thumb").replaceWith(img);
+        attachImageGallery(img,x);
       }
 
       e.querySelector(".name").textContent = x.item_name;
@@ -1156,16 +1300,15 @@ renderAll();
     window.openMissingForm = function(term,index=""){
       oldOpenMissingFormV14(term,index);
       const row = index !== "" ? missingItems()[Number(index)] : null;
-      const imgUrl = document.getElementById("missingImageUrl");
-      if(imgUrl) imgUrl.value = row?.image_url || "";
-      const imgLocal = document.getElementById("missingImageLocal");
-      if(imgLocal) imgLocal.value = row?.image_local || "";
+      if (missingImageEditor) missingImageEditor.setImages(row ? (window.ImageLibrary?.normalizeImages(row) || []) : []);
     };
   }
 
   const oldSaveMissingDetailsV14 = window.saveMissingDetails;
   if(oldSaveMissingDetailsV14){
     window.saveMissingDetails = function(formData){
+      const editorImages = missingImageEditor?.getImages() || formData.images || [];
+      formData.images = window.ImageLibrary?.normalizeImages(editorImages) || [];
       formData.image_url = document.getElementById("missingImageUrl")?.value.trim() || "";
       formData.image_local = document.getElementById("missingImageLocal")?.value.trim() || "";
       oldSaveMissingDetailsV14(formData);
@@ -1190,10 +1333,10 @@ renderAll();
   if(exportMissingBtn){
     exportMissingBtn.onclick = () => {
       const rows = [
-        "term,item_name,brand,quantity,unit,category,organic,is_seasonal,season,festival,image_url,image_local,notes,date",
+        "term,item_name,brand,quantity,unit,category,organic,is_seasonal,season,festival,images,image_url,image_local,notes,date",
         ...missingItems().map(x => [
           x.term||"", x.item_name||"", x.brand||"", x.quantity||"", x.unit||"", x.category||"",
-          x.organic||"", x.is_seasonal||"", x.season||"", x.festival||"",
+          x.organic||"", x.is_seasonal||"", x.season||"", x.festival||"", window.ImageLibrary?.serializeImages(x)||"[]",
           x.image_url||"", x.image_local||"", x.notes||"", x.date||""
         ].map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
       ];
@@ -1908,8 +2051,9 @@ function renderDashboardRecentProducts(){
  if(!recentItems.length){box.innerHTML='<div class="dashboard-empty-mini">No recent products yet. Search or scan an item and it will appear here.</div>';return}
  recentItems.forEach(item=>{
   const row=document.createElement("button"); row.type="button"; row.className="dashboard-recent-row";
-  const image=item.image_local||item.image_url||"";
-  row.innerHTML=`<span class="dashboard-recent-thumb">${image?`<img src="${image}" alt="">`:'<span aria-hidden="true">▧</span>'}</span><span class="dashboard-recent-copy"><b>${item.name||item.item_name||"Product"}</b><small>${item.brand?item.brand+" • ":""}PLU ${item.code||"—"}</small></span><span class="dashboard-recent-arrow">›</span>`;
+  const image=primaryProductImage(item);
+  row.innerHTML=`<span class="dashboard-recent-thumb">${image?`<img src="${image}" alt="${item.item_name||item.name||"Product"}">`:'<span aria-hidden="true">▧</span>'}</span><span class="dashboard-recent-copy"><b>${item.name||item.item_name||"Product"}</b><small>${item.brand?item.brand+" • ":""}PLU ${item.code||"—"}</small></span><span class="dashboard-recent-arrow">›</span>`;
+  if(image){const recentImg=row.querySelector(".dashboard-recent-thumb img");attachImageGallery(recentImg,item)}
   row.onclick=()=>{if(q){q.value=item.code||item.name||""}go("lookup")};
   box.appendChild(row);
  });

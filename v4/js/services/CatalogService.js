@@ -51,12 +51,13 @@
       const brand = row.brand || this.detectBrand(item_name);
       const category = row.category || "";
       const type = row.type || (code.length > 6 ? "packaged" : "produce");
+      const images = global.ImageLibrary?.normalizeImages(row) || [];
       const image_local = row.image_local || row.image || "";
-      const image_url = row.image_url || "";
+      const image_url = row.image_url || images[0] || "";
       const notes = row.notes || "";
       const aliases = row.aliases || "";
       const search_keywords = row.search_keywords || [item_name, code, quantity, brand, category, type, notes, aliases].join(" ");
-      return { item_name, code, quantity, brand, category, type, image_local, image_url, notes, aliases, hay: search_keywords.toLowerCase() };
+      return { item_name, code, quantity, brand, category, type, images, image_local, image_url, notes, aliases, hay: search_keywords.toLowerCase() };
     }
 
     rowsToItems(rows) {
@@ -77,11 +78,30 @@
       const products = Array.isArray(catalog?.products) ? catalog.products : [];
       const codes = Array.isArray(catalog?.productCodes) ? catalog.productCodes : [];
       const aliases = Array.isArray(catalog?.productAliases) ? catalog.productAliases : [];
+      const productImages = Array.isArray(catalog?.productImages) ? catalog.productImages : [];
       const categories = Array.isArray(catalog?.categories) ? catalog.categories : [];
       const storeProducts = Array.isArray(catalog?.storeProducts) ? catalog.storeProducts : [];
       const configuredStoreId = global.AppConfig?.catalog?.storeId || "";
 
       const categoryById = new Map(categories.map(row => [String(row.category_id || row.public_id || ""), row]));
+      const imagesByProduct = new Map();
+      productImages.forEach(row => {
+        const productId = String(row.product_id || "");
+        if (!productId) return;
+        const src = String(row.image_url || row.url || row.image_path || row.src || "").trim();
+        if (!src) return;
+        if (!imagesByProduct.has(productId)) imagesByProduct.set(productId, []);
+        imagesByProduct.get(productId).push({
+          src,
+          sortOrder: Number(row.sort_order || row.position || 0),
+          isPrimary: this.toBoolean(row.is_primary, false)
+        });
+      });
+      imagesByProduct.forEach((rows, productId) => {
+        rows.sort((a,b) => Number(b.isPrimary)-Number(a.isPrimary) || a.sortOrder-b.sortOrder);
+        imagesByProduct.set(productId, rows.map(row => row.src));
+      });
+
       const aliasesByProduct = new Map();
       aliases.forEach(row => {
         const productId = String(row.product_id || "");
@@ -136,6 +156,10 @@
             brand: product.brand || "",
             category: categoryRow?.category_name || product.subcategory || "",
             type,
+            images: [
+              ...(imagesByProduct.get(productId) || []),
+              ...(global.ImageLibrary?.normalizeImages(product) || [])
+            ],
             image_url: product.image_url || "",
             notes: storeProduct?.notes || "",
             aliases: aliasText,
@@ -197,7 +221,7 @@
     itemsToCsv(items) {
       const headers = [
         "item_name", "code", "quantity", "brand", "category", "type",
-        "image_local", "image_url", "notes", "aliases", "search_keywords",
+        "images", "image_local", "image_url", "notes", "aliases", "search_keywords",
         "organic", "is_archived", "is_seasonal", "season", "festival"
       ];
       const lines = [headers.join(",")];
@@ -213,6 +237,7 @@
           brand: item.brand || "",
           category: item.category || "",
           type: item.type || (String(item.code || "").length > 6 ? "packaged" : "produce"),
+          images: global.ImageLibrary?.serializeImages(item) || "[]",
           image_local: item.image_local || "",
           image_url: item.image_url || "",
           notes: item.notes || "",

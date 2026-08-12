@@ -76,7 +76,7 @@
     <div class="drawer-group-title">Settings</div>
     <button type="button" data-drawer-action="data-tools"><span class="drawer-icon">⚙</span><span>Data &amp; Backup</span></button>
   </nav>
-  <div class="drawer-footer"><span class="drawer-version">v52.1.3</span><span class="drawer-online"><i></i> Online</span></div>
+  <div class="drawer-footer"><span class="drawer-version">v52.2.4</span><span class="drawer-online"><i></i> Online</span></div>
 </aside>
 
 
@@ -409,13 +409,22 @@
         <label>Season <input id="missingSeason" type="text" placeholder="Summer / Fall / Winter"></label>
         <label>Festival <input id="missingFestival" type="text" placeholder="Halloween / Valentine"></label>
       </div>
-      <label>Image URL
-        <input id="missingImageUrl" type="url" placeholder="https://example.com/product.jpg">
-      </label>
-
-      <label>Local Image Path
-        <input id="missingImageLocal" type="text" placeholder="images/product-name.jpg">
-      </label>
+      <section id="missingImagesEditor" class="image-list-editor" aria-labelledby="missingImagesTitle">
+        <div class="image-list-editor-head">
+          <div>
+            <strong id="missingImagesTitle">Product Images</strong>
+            <small>The first image is used as the product thumbnail.</small>
+          </div>
+          <span id="missingImageCount" data-image-count>0 images</span>
+        </div>
+        <div class="image-list-add-row">
+          <input id="missingImageInput" data-image-input type="text" placeholder="Paste image URL or local image path">
+          <button id="missingAddImageBtn" data-image-add type="button">Add Image</button>
+        </div>
+        <div id="missingImageList" class="image-list-editor-list" data-image-list aria-live="polite"></div>
+        <input id="missingImageUrl" type="hidden">
+        <input id="missingImageLocal" type="hidden">
+      </section>
 
       <label>Notes
         <textarea id="missingNotes" rows="3" placeholder="Optional notes"></textarea>
@@ -443,4 +452,4 @@
   </div>
 </div>
 
-<footer>Local-first catalog with user-controlled remote updates.</footer><script src="data.js"></script><script src="src/core/config/AppConfig.js"></script><script src="src/core/logging/Logger.js"></script><script src="src/core/utils/UrlUtils.js"></script><script src="src/core/http/HttpClient.js"></script><script src="src/core/storage/LocalStorageClient.js"></script><script src="src/core/storage/IndexedDbClient.js"></script><script src="src/core/router/Router.js"></script><script src="src/core/update/AppUpdateManager.js"></script><script src="src/app.js"></script><script src="js/providers/LocalCatalogProvider.js"></script><script src="js/providers/GoogleSheetsCatalogProvider.js"></script><script src="js/services/CatalogService.js"></script><script src="src/modules/products/providers/LegacyCatalogProductProvider.js"></script><script src="src/modules/products/providers/StaticCatalogVersionProvider.js"></script><script src="src/modules/products/providers/IndexedDbProductProvider.js"></script><script src="src/modules/products/ProductRepository.js"></script><script src="src/modules/products/ProductService.js"></script><script src="src/modules/products/ProductView.js"></script><script src="src/modules/products/ProductController.js"></script><script src="src/modules/orders/LocalOrderSessionStore.js"></script><script src="src/core/barcode/BarcodeRenderer.js"></script><script src="src/core/barcode/BarcodeViewer.js"></script><script src="app.js"></script></body></html>
+<footer>Local-first catalog with user-controlled remote updates.</footer><script src="data.js"></script><script src="src/core/config/AppConfig.js"></script><script src="src/core/logging/Logger.js"></script><script src="src/core/utils/UrlUtils.js"></script><script src="src/core/http/HttpClient.js"></script><script src="src/core/storage/LocalStorageClient.js"></script><script src="src/core/storage/IndexedDbClient.js"></script><script src="src/core/router/Router.js"></script><script src="src/core/update/AppUpdateManager.js"></script><script src="src/app.js"></script><script src="js/providers/LocalCatalogProvider.js"></script><script src="js/providers/GoogleSheetsCatalogProvider.js"></script><script src="js/services/CatalogService.js"></script><script src="src/modules/products/providers/LegacyCatalogProductProvider.js"></script><script src="src/modules/products/providers/StaticCatalogVersionProvider.js"></script><script src="src/modules/products/providers/IndexedDbProductProvider.js"></script><script src="src/modules/products/ProductRepository.js"></script><script src="src/modules/products/ProductService.js"></script><script src="src/modules/products/ProductView.js"></script><script src="src/modules/products/ProductController.js"></script><script src="src/modules/orders/LocalOrderSessionStore.js"></script><script src="src/core/barcode/BarcodeRenderer.js"></script><script src="src/core/barcode/BarcodeViewer.js"></script><script src="src/core/media/ImageLibrary.js"></script><script src="src/core/media/ImageListEditor.js"></script><script src="src/core/media/ImageGallery.js"></script><script src="app.js"></script></body></html>

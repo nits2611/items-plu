@@ -2,6 +2,7 @@ const CATALOG_SHEETS = Object.freeze({
   products: "products",
   productCodes: "product_codes",
   productAliases: "product_aliases",
+  productImages: "product_images",
   categories: "categories",
   storeProducts: "store_products",
   appSettings: "app_settings"
@@ -53,6 +54,7 @@ function getProductCatalog_(event) {
       products: readSheet_(spreadsheet, CATALOG_SHEETS.products),
       productCodes: readSheet_(spreadsheet, CATALOG_SHEETS.productCodes),
       productAliases: readSheet_(spreadsheet, CATALOG_SHEETS.productAliases),
+      productImages: readOptionalSheet_(spreadsheet, CATALOG_SHEETS.productImages),
       categories: readSheet_(spreadsheet, CATALOG_SHEETS.categories),
       storeProducts,
       appSettings
@@ -77,6 +79,12 @@ function readSheet_(spreadsheet, sheetName) {
       });
       return record;
     });
+}
+
+function readOptionalSheet_(spreadsheet, sheetName) {
+  const sheet = spreadsheet.getSheetByName(sheetName);
+  if (!sheet) return [];
+  return readSheet_(spreadsheet, sheetName);
 }
 
 function getSetting_(settings, key) {

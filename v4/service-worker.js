@@ -1,4 +1,4 @@
-const CACHE="my-produce-assistant-v52.1.8-barcode-options";
+const CACHE="my-produce-assistant-v52.2.6-missing-modal-desktop-polish";
 const SHELL=[
   "./",
   "./index.html",
@@ -29,6 +29,9 @@ const SHELL=[
   "./src/modules/orders/LocalOrderSessionStore.js",
   "./src/core/barcode/BarcodeRenderer.js",
   "./src/core/barcode/BarcodeViewer.js",
+  "./src/core/media/ImageLibrary.js",
+  "./src/core/media/ImageListEditor.js",
+  "./src/core/media/ImageGallery.js",
   "./manifest.webmanifest",
   "./items.csv",
   "./icons/icon-192.png",

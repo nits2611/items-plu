@@ -82,6 +82,7 @@
         products: source.products,
         productCodes: source.productCodes ?? source.product_codes,
         productAliases: source.productAliases ?? source.product_aliases,
+        productImages: source.productImages ?? source.product_images ?? [],
         categories: source.categories,
         storeProducts: source.storeProducts ?? source.store_products,
         appSettings: source.appSettings ?? source.app_settings ?? []
