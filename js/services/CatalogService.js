@@ -51,12 +51,13 @@
       const brand = row.brand || this.detectBrand(item_name);
       const category = row.category || "";
       const type = row.type || (code.length > 6 ? "packaged" : "produce");
+      const images = global.ImageLibrary?.normalizeImages(row) || [];
       const image_local = row.image_local || row.image || "";
-      const image_url = row.image_url || "";
+      const image_url = row.image_url || images[0] || "";
       const notes = row.notes || "";
       const aliases = row.aliases || "";
       const search_keywords = row.search_keywords || [item_name, code, quantity, brand, category, type, notes, aliases].join(" ");
-      return { item_name, code, quantity, brand, category, type, image_local, image_url, notes, aliases, hay: search_keywords.toLowerCase() };
+      return { item_name, code, quantity, brand, category, type, images, image_local, image_url, notes, aliases, hay: search_keywords.toLowerCase() };
     }
 
     rowsToItems(rows) {
@@ -77,11 +78,30 @@
       const products = Array.isArray(catalog?.products) ? catalog.products : [];
       const codes = Array.isArray(catalog?.productCodes) ? catalog.productCodes : [];
       const aliases = Array.isArray(catalog?.productAliases) ? catalog.productAliases : [];
+      const productImages = Array.isArray(catalog?.productImages) ? catalog.productImages : [];
       const categories = Array.isArray(catalog?.categories) ? catalog.categories : [];
       const storeProducts = Array.isArray(catalog?.storeProducts) ? catalog.storeProducts : [];
       const configuredStoreId = global.AppConfig?.catalog?.storeId || "";
 
       const categoryById = new Map(categories.map(row => [String(row.category_id || row.public_id || ""), row]));
+      const imagesByProduct = new Map();
+      productImages.forEach(row => {
+        const productId = String(row.product_id || "");
+        if (!productId) return;
+        const src = String(row.image_url || row.url || row.image_path || row.src || "").trim();
+        if (!src) return;
+        if (!imagesByProduct.has(productId)) imagesByProduct.set(productId, []);
+        imagesByProduct.get(productId).push({
+          src,
+          sortOrder: Number(row.sort_order || row.position || 0),
+          isPrimary: this.toBoolean(row.is_primary, false)
+        });
+      });
+      imagesByProduct.forEach((rows, productId) => {
+        rows.sort((a,b) => Number(b.isPrimary)-Number(a.isPrimary) || a.sortOrder-b.sortOrder);
+        imagesByProduct.set(productId, rows.map(row => row.src));
+      });
+
       const aliasesByProduct = new Map();
       aliases.forEach(row => {
         const productId = String(row.product_id || "");
@@ -136,6 +156,10 @@
             brand: product.brand || "",
             category: categoryRow?.category_name || product.subcategory || "",
             type,
+            images: [
+              ...(imagesByProduct.get(productId) || []),
+              ...(global.ImageLibrary?.normalizeImages(product) || [])
+            ],
             image_url: product.image_url || "",
             notes: storeProduct?.notes || "",
             aliases: aliasText,
@@ -167,28 +191,130 @@
     }
 
     async checkForUpdate() {
-      if (this.cloudProvider?.isConfigured?.()) {
-        const result = await this.cloudProvider.sync();
-        return {
-          changed: result.changed,
-          version: result.version,
-          items: result.changed ? this.catalogToItems(result.catalog) : null,
-          source: "google-sheets"
-        };
-      }
-
-      const csvText = await this.localProvider.fetchRemoteCsv();
-      const hash = await this.hashText(csvText);
-      const previousHash = this.localProvider.getCachedHash();
-      const changed = !previousHash || previousHash !== hash;
-      if (changed) this.localProvider.saveCsv(csvText, hash);
-      return { changed, hash, csvText, items: changed ? this.csvToItems(csvText) : null, source: "bundled-csv" };
+      // Retained as a compatibility method. v50 performs lightweight version
+      // checks through data/versions.json and never downloads remote data here.
+      return { changed: false, items: null, source: "manual-update" };
     }
 
-    async importCsv(csvText) {
-      const hash = await this.hashText(csvText);
-      this.localProvider.saveCsv(csvText, hash);
-      return { hash, csvText, items: this.csvToItems(csvText) };
+    async downloadRemoteCatalog({ force = true } = {}) {
+      if (!this.cloudProvider?.isConfigured?.()) {
+        throw new Error("The Google Apps Script catalog endpoint is not configured in AppConfig.");
+      }
+
+      const result = await this.cloudProvider.downloadCatalog({ force });
+      const catalog = result?.catalog;
+      const required = ["products", "productCodes", "productAliases", "categories", "storeProducts"];
+      const missing = required.filter(key => !Array.isArray(catalog?.[key]));
+      if (missing.length) {
+        throw new Error(`Remote catalog is missing required data: ${missing.join(", ")}.`);
+      }
+
+      const items = this.catalogToItems(catalog);
+      if (!items.length) throw new Error("Remote catalog could not be converted into searchable products.");
+      return { version: result.version, catalog, items, source: "google-sheets" };
+    }
+
+    _csvEscape(value) {
+      return `"${String(value ?? "").replaceAll('"', '""')}"`;
+    }
+
+    itemsToCsv(items) {
+      const headers = [
+        "item_name", "code", "quantity", "brand", "category", "type",
+        "images", "image_local", "image_url", "notes", "aliases", "search_keywords",
+        "organic", "is_archived", "is_seasonal", "season", "festival"
+      ];
+      const lines = [headers.join(",")];
+      (Array.isArray(items) ? items : []).forEach(item => {
+        const search = [
+          item.item_name, item.code, item.quantity, item.brand, item.category,
+          item.type, item.notes, item.aliases, item.organic, item.season, item.festival
+        ].filter(Boolean).join(" ").toUpperCase();
+        const row = {
+          item_name: item.item_name || "",
+          code: item.code || "",
+          quantity: item.quantity || "",
+          brand: item.brand || "",
+          category: item.category || "",
+          type: item.type || (String(item.code || "").length > 6 ? "packaged" : "produce"),
+          images: global.ImageLibrary?.serializeImages(item) || "[]",
+          image_local: item.image_local || "",
+          image_url: item.image_url || "",
+          notes: item.notes || "",
+          aliases: item.aliases || "",
+          search_keywords: item.hay ? String(item.hay).toUpperCase() : search,
+          organic: item.organic || "",
+          is_archived: /^(yes|true|1|archived)$/i.test(String(item.is_archived || "")) ? "Yes" : "",
+          is_seasonal: /^(yes|true|1)$/i.test(String(item.is_seasonal || "")) ? "Yes" : "",
+          season: item.season || "",
+          festival: item.festival || ""
+        };
+        lines.push(headers.map(header => this._csvEscape(row[header])).join(","));
+      });
+      return lines.join("\n");
+    }
+
+    _importKey(item) {
+      const normalize = value => String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+      const code = normalize(item?.code);
+      if (code) return `code:${code}`;
+      return `product:${[item?.item_name, item?.brand, item?.quantity, item?.organic]
+        .map(normalize).join("|")}`;
+    }
+
+    _mergeItems(existingItems, importedItems) {
+      const merged = (Array.isArray(existingItems) ? existingItems : []).map(item => ({ ...item }));
+      const indexByKey = new Map();
+      merged.forEach((item, index) => indexByKey.set(this._importKey(item), index));
+
+      let added = 0;
+      let updated = 0;
+      let skipped = 0;
+      const seenImportKeys = new Set();
+
+      (Array.isArray(importedItems) ? importedItems : []).forEach(imported => {
+        const key = this._importKey(imported);
+        if (!key || key === "product:|||") { skipped += 1; return; }
+        if (seenImportKeys.has(key)) { skipped += 1; return; }
+        seenImportKeys.add(key);
+
+        if (indexByKey.has(key)) {
+          const index = indexByKey.get(key);
+          const current = merged[index];
+          const next = { ...current };
+          Object.entries(imported).forEach(([field, value]) => {
+            if (value !== undefined && value !== null && String(value).trim() !== "") next[field] = value;
+          });
+          merged[index] = next;
+          updated += 1;
+        } else {
+          indexByKey.set(key, merged.length);
+          merged.push({ ...imported });
+          added += 1;
+        }
+      });
+
+      return { items: merged, stats: { added, updated, skipped, preserved: merged.length - added } };
+    }
+
+    async importCsv(csvText, { mode = "replace", existingItems = [] } = {}) {
+      const importedItems = this.csvToItems(csvText).filter(item =>
+        String(item?.item_name || "").trim() || String(item?.code || "").trim()
+      );
+      if (!importedItems.length) throw new Error("The selected CSV does not contain valid product rows.");
+
+      let finalItems = importedItems;
+      let stats = { added: importedItems.length, updated: 0, skipped: 0, preserved: 0 };
+      if (mode === "merge") {
+        const result = this._mergeItems(existingItems, importedItems);
+        finalItems = result.items;
+        stats = result.stats;
+      }
+
+      const normalizedCsv = this.itemsToCsv(finalItems);
+      const hash = await this.hashText(normalizedCsv);
+      this.localProvider.saveCsv(normalizedCsv, hash);
+      return { hash, csvText: normalizedCsv, items: finalItems, mode, stats };
     }
 
     reset() {

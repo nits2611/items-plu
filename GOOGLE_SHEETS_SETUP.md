@@ -59,3 +59,29 @@ Updating the GitHub version last prevents users from being offered a release bef
 - Full product data is requested only when the user clicks **Update Catalog**.
 - The response must contain products, product codes, aliases, categories, and store products.
 - If validation fails, the existing IndexedDB catalog is kept.
+
+## Product image gallery (v52.2.1)
+
+The preferred product image field is now `images` on the `products` tab.
+
+Store the value as a JSON array in a single Google Sheets cell:
+
+```text
+["https://example.com/apple-front.jpg","https://example.com/apple-side.jpg"]
+```
+
+A product may contain one or many images. The first image is used as the card thumbnail and all images are available in the product gallery.
+
+For backward compatibility, existing `image_url` values still work. You do not need to migrate every record immediately. New or edited products should use `images` going forward. The Apps Script endpoint already returns this field automatically because it reads all sheet headers dynamically.
+
+### Optional normalized `product_images` tab
+
+For the current Google Sheets phase, the `products.images` JSON-array cell is supported and is the simplest way to maintain multiple images.
+
+The app also supports an optional `product_images` tab for a more database-like structure. Suggested columns:
+
+```text
+product_image_id | product_id | image_url | sort_order | is_primary | status
+```
+
+If the tab exists, its rows are merged into the same frontend `images[]` array. This prepares us for PostgreSQL later, where a one-to-many `product_images` table is preferable to storing an array directly in a relational product row.

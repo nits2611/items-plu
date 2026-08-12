@@ -32,6 +32,11 @@
     }
 
     async fetchRemoteCsv() {
+      if (global.HttpClient) {
+        return global.HttpClient.get(this.csvUrl, { cache: "no-cache", responseType: "text" });
+      }
+
+      // Compatibility fallback for stale pages that have not loaded HttpClient yet.
       const response = await fetch(this.csvUrl, { cache: "no-cache" });
       if (!response.ok) {
         throw new Error(`Catalog request failed with status ${response.status}`);

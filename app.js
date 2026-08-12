@@ -1,5 +1,5 @@
-const SAVE_ON_BASE="https://www.saveonfoods.com/sm/planning/rsid/1982/results?q=",CSV_URL="./items.csv",STORAGE_CSV="plu_items_csv_current",STORAGE_HASH="plu_items_csv_hash",STORE="default-store";
-let items=[],filter="all",deferredPrompt=null,scannerStream=null,scannerTimer=null;
+const SAVE_ON_BASE=window.AppConfig?.urls?.saveOnSearchBase||"https://www.saveonfoods.com/sm/planning/rsid/1982/results?q=",CSV_URL=window.AppConfig?.urls?.bundledCatalog||"./items.csv",STORAGE_CSV=window.AppConfig?.catalog?.legacyCsvKey||"plu_items_csv_current",STORAGE_HASH=window.AppConfig?.catalog?.legacyCsvHashKey||"plu_items_csv_hash",STORE=window.AppConfig?.storage?.storeNamespace||"default-store";
+let items=[],filter="all",deferredPrompt=null,scannerStream=null,scannerTimer=null,scannerContext="lookup",scannerAccepting=false;
 const q=document.getElementById("q"),results=document.getElementById("results"),msg=document.getElementById("message"),count=document.getElementById("count"),syncStatus=document.getElementById("syncStatus");
 const CODE128=["212222","222122","222221","121223","121322","131222","122213","122312","132212","221213","221312","231212","112232","122132","122231","113222","123122","123221","223211","221132","221231","213212","223112","312131","311222","321122","321221","312212","322112","322211","212123","212321","232121","111323","131123","131321","112313","132113","132311","211313","231113","231311","112133","112331","132131","113123","113321","133121","313121","211331","231131","213113","213311","213131","311123","311321","331121","312113","312311","332111","314111","221411","431111","111224","111422","121124","121421","141122","141221","112214","112412","122114","122411","142112","142211","241211","221114","413111","241112","134111","111242","121142","121241","114212","124112","124211","411212","421112","421211","212141","214121","412121","111143","111341","131141","114113","114311","411113","411311","113141","114131","311141","411131","211412","211214","211232","2331112"];
 
@@ -10,70 +10,120 @@ const localCatalogProvider=new LocalCatalogProvider({
   bundledItems:window.DEFAULT_ITEMS||[]
 });
 const cloudCatalogProvider=new GoogleSheetsCatalogProvider({
-  apiUrl:window.AppConfig?.googleSheets?.apiUrl||"",
+  apiUrl:window.AppConfig?.api?.googleSheets?.apiUrl||window.AppConfig?.googleSheets?.apiUrl||"",
   storageCatalogKey:window.AppConfig?.catalog?.cacheKey,
   storageVersionKey:window.AppConfig?.catalog?.cacheVersionKey,
   storageUpdatedAtKey:window.AppConfig?.catalog?.cacheUpdatedAtKey,
-  storeId:window.AppConfig?.catalog?.storeId
+  storeId:window.AppConfig?.catalog?.storeId,
+  timeoutMs:window.AppConfig?.http?.timeoutMs
 });
 const catalogService=new CatalogService(localCatalogProvider,cloudCatalogProvider);
 
-// Compatibility wrappers keep the existing UI code unchanged while all catalog
-// parsing, normalization, caching, and update logic lives in the service layer.
+// v48 Product module. The adapter keeps the proven CatalogService stack in
+// place while the rest of the application now talks through product-domain
+// boundaries that can later move to IndexedDB/API providers independently.
+const legacyProductProvider=new LegacyCatalogProductProvider(catalogService);
+const productDbClient=new IndexedDbClient({
+  databaseName:window.AppConfig?.storage?.databaseName||"my-produce-assistant",
+  databaseVersion:window.AppConfig?.storage?.databaseVersion||1,
+  stores:[{name:"products",options:{keyPath:"id"}}]
+});
+const catalogVersionProvider=new StaticCatalogVersionProvider({
+  url:window.AppConfig?.urls?.versions||"./data/versions.json",
+  httpClient:HttpClient,
+  timeoutMs:10000
+});
+const indexedDbProductProvider=new IndexedDbProductProvider({
+  primaryProvider:legacyProductProvider,
+  dbClient:productDbClient,
+  versionProvider:catalogVersionProvider,
+  storeName:"products",
+  versionStorageKey:window.AppConfig?.catalog?.releaseVersionKey||"myProduceAssistant.productCatalogReleaseVersion",
+  bundledVersion:window.AppConfig?.catalog?.bundledVersion||"1.0.0"
+});
+const productRepository=new ProductRepository(indexedDbProductProvider);
+const productService=new ProductService(productRepository);
+const productView=new ProductView({
+  renderAll:()=>renderAll(),
+  setSync:(message,level)=>setSync(message,level),
+  renderCatalogUpdate:state=>renderCatalogUpdate(state)
+});
+const productController=new ProductController({
+  service:productService,
+  view:productView,
+  onItemsChanged:next=>{items=next;}
+});
+window.ProductModule=Object.freeze({controller:productController,service:productService,repository:productRepository,storage:indexedDbProductProvider});
+
+// Compatibility wrappers preserve existing extension code while catalog parsing
+// helpers remain in CatalogService during this migration phase.
 const parseCSV=text=>catalogService.parseCsv(text);
 const sha256Short=text=>catalogService.hashText(text);
 const detectBrand=name=>catalogService.detectBrand(name);
 const normalize=row=>catalogService.normalizeRow(row);
 const rowsToItems=rows=>catalogService.rowsToItems(rows);
-function setItemsFromCSV(text){items=catalogService.csvToItems(text);renderAll()}
-async function loadInitialData(){
-  try{
-    const initial=await catalogService.loadInitialCatalog();
-    items=initial.items;
-    renderAll();
-    setSync(initial.source==="cloud-cache"?"Loaded cached cloud catalog. Checking updates...":initial.source==="csv-cache"?"Loaded cached CSV. Checking updates...":"Loaded bundled data. Checking updates...");
-  }catch(error){
-    items=[];
-    renderAll();
-    setSync("Unable to load catalog data.","warn");
-  }
-  await checkForCSVUpdate();
-}
-async function checkForCSVUpdate(){
-  try{
-    const update=await catalogService.checkForUpdate();
-    if(update.changed){
-      items=update.items;
-      renderAll();
-      setSync(`${update.source==="google-sheets"?"Cloud catalog":"Data"} updated (${items.length} items).`);
-    }else{
-      setSync(`Data up to date (${items.length} items).`);
-    }
-  }catch(error){
-    console.error("[Catalog sync] Update failed:", error);
-    setSync(`Offline/cached mode (${items.length} items).`,"warn");
-  }
-}
+function setItemsFromCSV(text){productController.setItemsFromCsv(text)}
+async function loadInitialData(){return productController.loadInitialData()}
+async function checkForCSVUpdate(){return productController.checkForUpdate()}
 function getJSON(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}}function setJSON(k,v){localStorage.setItem(k,JSON.stringify(v))}
-const key=n=>`plu_${STORE}_${n}`;const favs=()=>getJSON(key("favorites"),[]);const recents=()=>getJSON(key("recent"),[]);const order=()=>getJSON(key("order"),[]);
+const orderSessionStore=new LocalOrderSessionStore({namespace:`plu_${STORE}`,storeId:window.AppConfig?.catalog?.storeId||"STR00000001"});
+orderSessionStore.migrateLegacy();
+const key=n=>orderSessionStore.key(n);
+const businessDate=()=>orderSessionStore.getBusinessDate();
+const currentOrderStatus=()=>orderSessionStore.getStatus();
+const setCurrentOrderStatus=status=>orderSessionStore.setStatus(status);
+window.OrderSessionModule=Object.freeze({storage:orderSessionStore,getBusinessDate:businessDate,getStatus:currentOrderStatus,setStatus:setCurrentOrderStatus});
+const favs=()=>getJSON(key("favorites"),[]);const recents=()=>getJSON(key("recent"),[]);const order=()=>getJSON(key("order"),[]);
 function isFav(code){return favs().includes(code)}function touch(code){let r=recents().filter(x=>x!==code);r.unshift(code);setJSON(key("recent"),r.slice(0,30))}
 function toggleFav(code){let f=favs();f=f.includes(code)?f.filter(x=>x!==code):[code,...f];setJSON(key("favorites"),f);renderAll()}
+function isCurrentOrderPlaced() {
+  return currentOrderStatus() === "Placed";
+}
+
+function syncFinalOrderBackStock(code, qty) {
+  const list = getJSON(key("front_stock"), []);
+  let changed = false;
+  const updated = list.map(row => {
+    if (String(row.code) !== String(code)) return row;
+    const nextQty = String(qty || "").trim();
+    if (String(row.back_qty || "") === nextQty) return row;
+    changed = true;
+    return { ...row, back_qty: nextQty };
+  });
+
+  if (changed) {
+    setJSON(key("front_stock"), updated);
+  }
+
+  if (typeof window.renderFrontStock === "function") window.renderFrontStock();
+  if (typeof window.renderFrontSearchResults === "function") window.renderFrontSearchResults();
+}
+
 function addOrder(item, qty, silent = false) {
+  if (isCurrentOrderPlaced()) {
+    if (!silent) toast("Order is placed and Back Stock is locked");
+    return false;
+  }
+
   qty = String(qty || "").trim();
 
   if (!qty || Number(qty) <= 0) {
     const before = order();
-    const after = before.filter(x => x.code !== item.code);
+    const after = before.filter(x => String(x.code) !== String(item.code));
     setJSON(key("order"), after);
+    syncFinalOrderBackStock(item.code, "");
     touch(item.code);
     renderOrder();
+    renderLookup();
     renderFavorites();
     renderRecent();
-    if (!silent && before.length !== after.length) toast(`${item.item_name} removed from order`);
-    return;
+    if (typeof window.renderFrontStock === "function") window.renderFrontStock();
+    if (typeof window.renderFrontSearchResults === "function") window.renderFrontSearchResults();
+    if (!silent && before.length !== after.length) toast(`${item.item_name} removed from back stock`);
+    return true;
   }
 
-  let current = order().filter(x => x.code !== item.code);
+  let current = order().filter(x => String(x.code) !== String(item.code));
   current.unshift({
     code: item.code,
     qty,
@@ -81,11 +131,16 @@ function addOrder(item, qty, silent = false) {
     addedAt: new Date().toISOString()
   });
   setJSON(key("order"), current);
+  syncFinalOrderBackStock(item.code, qty);
   touch(item.code);
   renderOrder();
+  renderLookup();
   renderFavorites();
   renderRecent();
+  if (typeof window.renderFrontStock === "function") window.renderFrontStock();
+  if (typeof window.renderFrontSearchResults === "function") window.renderFrontSearchResults();
   if (!silent) toast(`${item.item_name} added to back stock: ${qty}`);
+  return true;
 }
 
 function getOrderQty(code) {
@@ -134,9 +189,9 @@ function saveOnSearchUrl(term) {
   return SAVE_ON_BASE + encodeURIComponent(String(term || "").trim());
 }
 
-function isOrg(x){return /(^ORG\b|ORGANIC)/i.test(x.item_name)}function isPackaged(x){return x.code.length>6||/packaged|upc/i.test(x.type)}
-function getResults(){let a=items,terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);if(filter==="produce")a=a.filter(x=>!isPackaged(x));if(filter==="packaged")a=a.filter(isPackaged);if(filter==="organic")a=a.filter(isOrg);if(terms.length)a=a.filter(x=>terms.every(t=>x.hay.includes(t)||x.item_name.toLowerCase().includes(t)||x.code.toLowerCase().includes(t)));return a.slice(0,100)}
-function byCodes(codes){return codes.map(c=>items.find(x=>x.code===c)).filter(Boolean)}
+function isOrg(x){return productService.isOrganic(x)}function isPackaged(x){return productService.isPackaged(x)}
+function getResults(){return productService.search({query:q.value,filter,limit:100})}
+function byCodes(codes){return productService.byCodes(codes)}
 function renderAll(){renderLookup();renderFavorites();renderRecent();renderOrder();renderMissing()}
 
 function renderNotFound(term) {
@@ -168,10 +223,42 @@ function renderNotFound(term) {
   count.textContent = clean ? "0 found" : `${items.length} items`;
 }
 
-function renderLookup(){const a=getResults();results.innerHTML="";count.textContent=q.value.trim()?`${a.length} found`:`${items.length} items`;if(!a.length){renderNotFound(q.value.trim());return}hide();const f=document.createDocumentFragment();a.forEach(x=>f.appendChild(card(x)));results.appendChild(f)}
+function renderLookup(){const a=getResults();results.innerHTML="";count.textContent=q.value.trim()?`${a.length} found`:`${items.length} items`;if(!a.length){renderNotFound(q.value.trim());return}hide();const f=document.createDocumentFragment();a.forEach(x=>f.appendChild(card(x,"lookup")));results.appendChild(f)}
 function renderFavorites(){const box=document.getElementById("favoritesResults");box.innerHTML="";const a=byCodes(favs());if(!a.length){box.innerHTML='<section class="message">No favorites yet. Tap ☆ on an item.</section>';return}a.forEach(x=>box.appendChild(card(x)))}
 function renderRecent(){const box=document.getElementById("recentResults");box.innerHTML="";const a=byCodes(recents());if(!a.length){box.innerHTML='<section class="message">No recent items yet.</section>';return}a.forEach(x=>box.appendChild(card(x)))}
-function renderOrder(){const box=document.getElementById("orderResults");box.innerHTML="";const o=order();if(!o.length){box.innerHTML='<section class="message">No back stock items yet. Add items from Lookup.</section>';return}o.forEach(row=>{const item=items.find(x=>x.code===row.code)||row;const e=document.createElement("article");e.className="order-item";e.innerHTML=`<div class="order-row"><div><h3></h3><div class="code"></div></div><div class="qty"></div></div><div class="barcode"></div><div class="actions"><button type="button">Edit Qty</button><button type="button">Remove</button></div>`;e.querySelector("h3").textContent=item.item_name;e.querySelector(".code").textContent=row.code;e.querySelector(".qty").textContent=row.qty;e.querySelector(".barcode").appendChild(code128SVG(row.code));e.querySelectorAll("button")[0].onclick=()=>{const q=prompt("Quantity:",row.qty);if(q){let arr=order();arr=arr.map(x=>x.code===row.code?{...x,qty:q}:x);setJSON(key("order"),arr);renderOrder()}};e.querySelectorAll("button")[1].onclick=()=>{setJSON(key("order"),order().filter(x=>x.code!==row.code));renderOrder()};box.appendChild(e)})}
+function renderOrder(){
+  const box=document.getElementById("orderResults");
+  if(!box)return;
+  box.innerHTML="";
+  const o=order();
+  const locked=isCurrentOrderPlaced();
+  if(!o.length){box.innerHTML='<section class="message">No back stock items yet. Add items from Lookup.</section>';return}
+  o.forEach(row=>{
+    const item=items.find(x=>String(x.code)===String(row.code))||row;
+    const e=document.createElement("article");
+    e.className="order-item";
+    e.innerHTML=`<div class="order-row"><div><h3></h3><div class="code"></div></div><div class="qty"></div></div><div class="barcode"></div><div class="actions"><button type="button" class="edit-order-qty">Edit Qty</button><button type="button" class="danger remove-order">Remove</button></div>`;
+    e.querySelector("h3").textContent=item.item_name;
+    e.querySelector(".code").textContent=row.code;
+    e.querySelector(".qty").textContent=row.qty;
+    window.BarcodeRenderer.render(e.querySelector(".barcode"),row.code);
+    const edit=e.querySelector(".edit-order-qty");
+    const remove=e.querySelector(".remove-order");
+    edit.disabled=locked;
+    remove.disabled=locked;
+    edit.onclick=()=>{
+      if(isCurrentOrderPlaced()){toast("Order is placed and Back Stock is locked");return}
+      const q=prompt("Quantity:",row.qty);
+      if(q===null)return;
+      addOrder(item,q,true);
+    };
+    remove.onclick=()=>{
+      if(isCurrentOrderPlaced()){toast("Order is placed and Back Stock is locked");return}
+      addOrder(item,"",true);
+    };
+    box.appendChild(e);
+  });
+}
 
 function renderMissing() {
   const box = document.getElementById("missingResults");
@@ -197,7 +284,152 @@ function renderMissing() {
   });
 }
 
-function card(x) {
+function productImages(item){return window.ImageLibrary?.normalizeImages(item)||[]}
+function primaryProductImage(item){return window.ImageLibrary?.primaryImage(item)||""}
+function attachImageGallery(target,item){
+  if(!target)return;
+  const images=productImages(item);
+  if(!images.length)return;
+  target.classList.add("has-gallery");
+  target.setAttribute("role","button");
+  target.setAttribute("tabindex","0");
+  target.setAttribute("aria-label",`View ${images.length>1?images.length+" images":"image"} for ${item.item_name||"product"}`);
+  const open=event=>{event?.preventDefault?.();event?.stopPropagation?.();window.ImageGallery?.open({images,title:item.item_name||"Product"})};
+  target.addEventListener("click",open);
+  target.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();open(event)}});
+}
+
+function lookupCard(x) {
+  const e = document.createElement("article");
+  e.className = "lookup-product-card" + (isOrg(x) ? " is-organic" : "");
+  const existingQty = getOrderQty(x.code);
+
+  e.innerHTML = `<div class="lookup-product-main">
+    <div class="lookup-product-image"><div class="thumb placeholder">No image</div></div>
+    <div class="lookup-product-copy">
+      <div class="lookup-product-title-row"><h2 class="name"></h2><button class="fav lookup-fav" type="button" aria-label="Toggle favorite"></button></div>
+      <div class="lookup-product-meta"></div>
+      <div class="lookup-product-code"><span>PLU / Code</span><strong class="code"></strong></div>
+    </div>
+  </div>
+  <div class="barcode lookup-barcode"></div>
+  <div class="lookup-product-controls">
+    <div class="lookup-qty-copy"><span>Back Stock</span><small>Today's quantity</small></div>
+    <div class="lookup-qty-stepper" role="group" aria-label="Back stock quantity">
+      <button class="qty-step qty-minus" type="button" aria-label="Decrease quantity">−</button>
+      <input class="qty-input" type="number" inputmode="decimal" min="0" step="1" placeholder="0" aria-label="Back stock quantity">
+      <button class="qty-step qty-plus" type="button" aria-label="Increase quantity">+</button>
+    </div>
+    <span class="save-status" aria-live="polite"></span>
+  </div>
+  <div class="lookup-product-actions">
+    <button class="copy" type="button"><span aria-hidden="true">⧉</span> Copy code</button>
+    <a target="_blank" rel="noopener"><span aria-hidden="true">↗</span> Save-On</a>
+  </div>`;
+
+  e.querySelector(".name").textContent = x.item_name;
+  e.querySelector(".code").textContent = x.code;
+
+  const meta=e.querySelector(".lookup-product-meta");
+  const values=[x.brand,x.quantity,x.category,isOrg(x)?"Organic":"",isPackaged(x)?"Packaged":"Produce"].filter(Boolean);
+  values.forEach((value,index)=>{
+    const s=document.createElement("span");
+    s.className="lookup-meta-pill" + (value==="Organic"?" is-organic":"") + (index>1?" is-muted":"");
+    s.textContent=value;
+    meta.appendChild(s);
+  });
+
+  const src=primaryProductImage(x);
+  if(src){
+    const img=document.createElement("img");
+    img.className="thumb";
+    img.alt=x.item_name;
+    img.src=src;
+    img.onerror=()=>img.replaceWith(placeholder());
+    e.querySelector(".thumb").replaceWith(img);
+    attachImageGallery(img,x);
+  }
+
+  window.BarcodeRenderer.render(e.querySelector(".lookup-barcode"),x.code);
+
+  const fav=e.querySelector(".lookup-fav");
+  const updateFav=()=>{
+    const on=isFav(x.code);
+    fav.textContent=on?"★":"☆";
+    fav.classList.toggle("fav-on",on);
+    fav.setAttribute("aria-label",on?"Remove from favorites":"Add to favorites");
+  };
+  updateFav();
+  fav.onclick=()=>toggleFav(x.code);
+
+  const qtyInput=e.querySelector(".qty-input");
+  const qtyMinus=e.querySelector(".qty-minus");
+  const qtyPlus=e.querySelector(".qty-plus");
+  const saveStatus=e.querySelector(".save-status");
+  const locked=isCurrentOrderPlaced();
+  qtyInput.value=existingQty||"";
+  qtyInput.disabled=locked;
+  qtyMinus.disabled=locked;
+  qtyPlus.disabled=locked;
+  e.classList.toggle("is-order-locked",locked);
+  if(locked){
+    saveStatus.textContent="Locked";
+    saveStatus.classList.add("locked");
+    qtyInput.setAttribute("aria-label","Back stock quantity locked because today's order is placed");
+  }else if(existingQty){
+    saveStatus.textContent="Saved";
+    saveStatus.classList.add("saved");
+  }
+
+  let saveTimer=null;
+  const saveQuantity=(immediate=false)=>{
+    if(isCurrentOrderPlaced()){
+      qtyInput.value=getOrderQty(x.code)||"";
+      saveStatus.textContent="Locked";
+      saveStatus.classList.remove("saved");
+      saveStatus.classList.add("locked");
+      return;
+    }
+    clearTimeout(saveTimer);
+    const qty=qtyInput.value.trim();
+    const persist=()=>{
+      addOrder(x,qty,true);
+      if(qty && Number(qty)>0){saveStatus.textContent="Saved";saveStatus.classList.add("saved")}
+      else{saveStatus.textContent="";saveStatus.classList.remove("saved")}
+    };
+    if(immediate){persist();return}
+    saveStatus.textContent=qty&&Number(qty)>0?"Saving...":"Removed";
+    saveStatus.classList.remove("saved");
+    saveTimer=setTimeout(persist,400);
+  };
+  qtyInput.addEventListener("input",()=>saveQuantity(false));
+  qtyInput.addEventListener("change",()=>saveQuantity(true));
+  qtyMinus.onclick=()=>{
+    const next=Math.max(0,(Number(qtyInput.value)||0)-1);
+    qtyInput.value=next===0?"":String(next);
+    saveQuantity(true);
+  };
+  qtyPlus.onclick=()=>{
+    qtyInput.value=String((Number(qtyInput.value)||0)+1);
+    saveQuantity(true);
+  };
+
+  const copy=e.querySelector(".copy");
+  copy.onclick=async()=>{
+    try{await navigator.clipboard.writeText(x.code)}catch{}
+    touch(x.code);
+    copy.innerHTML='<span aria-hidden="true">✓</span> Copied';
+    setTimeout(()=>copy.innerHTML='<span aria-hidden="true">⧉</span> Copy code',900);
+    renderRecent();
+  };
+  const link=e.querySelector("a");
+  link.href=SAVE_ON_BASE+encodeURIComponent(x.code);
+  link.onclick=()=>touch(x.code);
+  return e;
+}
+
+function card(x, variant="default") {
+  if (variant === "lookup") return lookupCard(x);
   const e = document.createElement("article");
   e.className = "card " + (isOrg(x) ? "org" : "");
   const existingQty = getOrderQty(x.code);
@@ -263,7 +495,7 @@ function card(x) {
     }
   });
 
-  const src = x.image_local || x.image_url;
+  const src = primaryProductImage(x);
   if (src) {
     const img = document.createElement("img");
     img.className = "thumb";
@@ -271,9 +503,10 @@ function card(x) {
     img.src = src;
     img.onerror = () => img.replaceWith(placeholder());
     e.querySelector(".thumb").replaceWith(img);
+    attachImageGallery(img,x);
   }
 
-  e.querySelector(".barcode").appendChild(code128SVG(x.code));
+  window.BarcodeRenderer.render(e.querySelector(".barcode"),x.code);
 
   const fav = e.querySelector(".fav");
   fav.textContent = isFav(x.code) ? "★" : "☆";
@@ -297,20 +530,143 @@ function card(x) {
 function placeholder(){const d=document.createElement("div");d.className="thumb placeholder";d.textContent="No image";return d}
 function code128SVG(v){v=String(v).trim();const numeric=/^\d+$/.test(v)&&v.length%2===0;let codes=[],sum;if(numeric){codes.push(105);sum=105;for(let i=0;i<v.length;i+=2){const c=Number(v.slice(i,i+2));codes.push(c);sum+=c*(codes.length-1)}}else{codes.push(104);sum=104;for(let i=0;i<v.length;i++){const c=v.charCodeAt(i)-32;codes.push(c);sum+=c*(codes.length-1)}}codes.push(sum%103,106);const mod=numeric&&v.length>6?2.05:2.3,h=58;let x=10,parts=[];for(const c of codes){const p=CODE128[c];if(!p)continue;for(let i=0;i<p.length;i++){const w=Number(p[i])*mod;if(i%2===0)parts.push(`<rect x="${x.toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${h}"/>`);x+=w}}x+=10;const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("viewBox",`0 0 ${Math.ceil(x)} ${h+18}`);svg.innerHTML=`<g fill="#000">${parts.join("")}</g><text x="${Math.ceil(x/2)}" y="${h+14}" text-anchor="middle" font-size="13" font-family="Arial" font-weight="700">${v}</text>`;return svg}
 function show(t){msg.hidden=false;msg.textContent=t}function hide(){msg.hidden=true;msg.textContent=""}function setSync(t,l=""){syncStatus.textContent=t;syncStatus.className="sync-status "+l}
-function switchView(v){document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.getElementById(v+"View").classList.add("active");renderAll()}
+function renderCatalogUpdate(state={}){
+  const card=document.getElementById("catalogUpdateCard");
+  const message=document.getElementById("catalogUpdateMessage");
+  const localVersion=document.getElementById("localCatalogVersion");
+  const remoteVersion=document.getElementById("remoteCatalogVersion");
+  const updatedDate=document.getElementById("catalogUpdateDate");
+  const updateButton=document.getElementById("updateCatalogBtn");
+  const checkButton=document.getElementById("checkCatalogUpdateBtn");
+  if(!card||!message)return;
+  const status=state.status||"checking";
+  card.dataset.status=status;
+  message.textContent=state.message||"Checking for catalog updates...";
+  if(localVersion)localVersion.textContent=state.localVersion||productService?.getLocalVersion?.()||"—";
+  if(remoteVersion)remoteVersion.textContent=state.remoteVersion||"—";
+  if(updatedDate){
+    if(state.remoteUpdatedAt){
+      const parsed=new Date(state.remoteUpdatedAt);
+      updatedDate.textContent=Number.isNaN(parsed.getTime())?`Published: ${state.remoteUpdatedAt}`:`Published: ${parsed.toLocaleString()}`;
+    }else updatedDate.textContent="";
+  }
+  if(updateButton){
+    updateButton.hidden=status!=="available";
+    updateButton.disabled=status==="downloading";
+  }
+  if(checkButton)checkButton.disabled=status==="checking"||status==="downloading";
+}
+function activateView(v){
+  const target=document.getElementById(v+"View");
+  if(!target){console.warn(`[View] Unknown view: ${v}`);return false}
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
+  document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
+  target.classList.add("active");
+
+  // Keep route-driven navigation (including browser Back/Forward) in sync
+  // with the fixed Lookup heading. Previously this was refreshed mainly by
+  // click handlers, so hashchange navigation could leave the old heading visible.
+  const lookupHeader=document.getElementById("lookupFixedHeader");
+  if(lookupHeader) lookupHeader.hidden=(v!=="lookup");
+
+  renderAll();
+  window.dispatchEvent(new Event("app:viewchange"));
+  return true
+}
+function switchView(v,options={}){
+  if(window.AppRouter&&!options.fromRouter){
+    return window.AppRouter.navigate(v)
+  }
+  return activateView(v)
+}
 q.addEventListener("input",renderLookup);document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>switchView(t.dataset.view));document.querySelectorAll(".filters button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".filters button").forEach(x=>x.classList.remove("active"));b.classList.add("active");filter=b.dataset.filter;renderLookup()});
 function initAdvancedToggle(){const btn=document.getElementById("advancedToggle"),controls=document.getElementById("advancedControls");if(!btn||!controls)return;function set(open){controls.hidden=!open;btn.setAttribute("aria-expanded",String(open));if (open) {
     btn.textContent = "✕";
   } else {
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5H21L14 13V19L10 21V13L3 5Z"/></svg>`;
   }localStorage.setItem("plu_advanced_open",open?"1":"0")}set(localStorage.getItem("plu_advanced_open")==="1");btn.onclick=e=>{e.preventDefault();set(controls.hidden)}}
-document.getElementById("csvUpload")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;try{const imported=await catalogService.importCsv(await f.text());items=imported.items;renderAll();setSync(`Uploaded CSV loaded (${items.length} items).`)}catch(error){setSync("Unable to import CSV.","warn")}});
-document.getElementById("resetBtn").onclick=()=>{items=catalogService.reset();renderAll();checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear back stock?")){setJSON(key("order"),[]);renderOrder()}};
+async function importCatalogCsv(file, mode){
+  if(!file)return;
+  try{
+    const result=await productController.importCsv(await file.text(),{mode});
+    const stats=result?.stats||{};
+    if(mode==="merge"){
+      setSync(`CSV merged: ${stats.added||0} added, ${stats.updated||0} updated, ${stats.skipped||0} skipped. Total ${items.length}.`);
+    }else{
+      setSync(`Local catalog replaced (${items.length} items).`);
+    }
+  }catch(error){
+    console.error("[Catalog import]",error);
+    setSync(error?.message||"Unable to import CSV.","warn");
+  }
+}
+
+document.getElementById("csvMergeUpload")?.addEventListener("change",async e=>{
+  const file=e.target.files[0];
+  await importCatalogCsv(file,"merge");
+  e.target.value="";
+});
+
+document.getElementById("csvReplaceUpload")?.addEventListener("change",async e=>{
+  const file=e.target.files[0];
+  if(file&&confirm("Replace this device's entire local store catalog with the selected CSV? Existing items not present in the file will be removed. This cannot affect another store or the shared master catalog.")){
+    await importCatalogCsv(file,"replace");
+  }
+  e.target.value="";
+});
+document.getElementById("checkCatalogUpdateBtn")?.addEventListener("click",async()=>{
+  renderCatalogUpdate({status:"checking",localVersion:productService.getLocalVersion(),message:"Checking for a newer catalog version..."});
+  await productController.checkForUpdate();
+});
+document.getElementById("updateCatalogBtn")?.addEventListener("click",async()=>{
+  if(!confirm("Download and install the available product catalog update on this device? Your existing local catalog will be preserved if the update fails."))return;
+  try{await productController.applyAvailableUpdate()}catch(_){/* UI already reports the error. */}
+});
+document.getElementById("resetBtn").onclick=async()=>{await productController.reset();await checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear back stock?")){setJSON(key("order"),[]);renderOrder()}};
 document.getElementById("exportOrderBtn").onclick=()=>downloadCSV("back-stock.csv",["item_name,code,quantity",...order().map(o=>`"${(o.item_name||"").replaceAll('"','""')}",${o.code},"${String(o.qty).replaceAll('"','""')}"`)].join("\n"));document.getElementById("exportProfileBtn").onclick=()=>{const data={favorites:favs(),recent:recents(),order:order(),exportedAt:new Date().toISOString()};downloadFile("plu-profile.json",JSON.stringify(data,null,2),"application/json")};document.getElementById("importProfile")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(data.favorites)setJSON(key("favorites"),data.favorites);if(data.recent)setJSON(key("recent"),data.recent);if(data.order)setJSON(key("order"),data.order);renderAll()});
 function downloadCSV(n,t){downloadFile(n,t,"text/csv")}function downloadFile(n,t,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type}));a.download=n;a.click();URL.revokeObjectURL(a.href)}
-async function startScanner(){if(!("BarcodeDetector" in window)){alert("Camera barcode scanner is not supported in this browser. Try Android Chrome. Bluetooth scanner can still type into search.");return}const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),status=document.getElementById("scannerStatus");modal.hidden=false;status.textContent="Opening camera...";try{scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});video.srcObject=scannerStream;await video.play();const detector=new BarcodeDetector({formats:["code_128","ean_13","upc_a","upc_e","ean_8"]});status.textContent="Point camera at barcode.";scannerTimer=setInterval(async()=>{try{const codes=await detector.detect(video);if(codes.length){const val=codes[0].rawValue;stopScanner();q.value=val;touch(val);switchView("lookup");renderLookup();if(!getResults().length){renderNotFound(val)}}}catch{}},500)}catch(e){status.textContent="Camera unavailable. Check permission/HTTPS."}}
-function stopScanner(){const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo");modal.hidden=true;if(scannerTimer)clearInterval(scannerTimer);scannerTimer=null;if(scannerStream)scannerStream.getTracks().forEach(t=>t.stop());scannerStream=null;video.srcObject=null}
-document.getElementById("scanBtn").onclick=startScanner;document.getElementById("closeScannerBtn").onclick=stopScanner;
+function positionScannerDetection(code){
+ const video=document.getElementById("scannerVideo"),box=document.getElementById("scannerDetectionBox");
+ if(!video||!box||!video.videoWidth||!video.videoHeight)return false;
+ const rect=video.getBoundingClientRect();
+ let left,top,width,height;
+ if(Array.isArray(code.cornerPoints)&&code.cornerPoints.length){
+  const xs=code.cornerPoints.map(p=>Number(p.x)||0),ys=code.cornerPoints.map(p=>Number(p.y)||0);
+  left=Math.min(...xs);top=Math.min(...ys);width=Math.max(...xs)-left;height=Math.max(...ys)-top;
+ }else if(code.boundingBox){
+  left=Number(code.boundingBox.x)||0;top=Number(code.boundingBox.y)||0;width=Number(code.boundingBox.width)||0;height=Number(code.boundingBox.height)||0;
+ }else{return false}
+ const sx=rect.width/video.videoWidth,sy=rect.height/video.videoHeight;
+ box.style.left=`${Math.max(0,left*sx)}px`;box.style.top=`${Math.max(0,top*sy)}px`;
+ box.style.width=`${Math.max(30,width*sx)}px`;box.style.height=`${Math.max(22,height*sy)}px`;
+ box.classList.add("visible");return true;
+}
+function handleScannerResult(value,context){
+ const val=String(value||"").trim();if(!val)return;
+ touch(val);
+ if(context==="finalOrder"){
+  const input=document.getElementById("frontQ");if(input)input.value=val;
+  switchView("frontStock");
+  if(typeof renderFrontSearchResults==="function")renderFrontSearchResults();
+  setTimeout(()=>document.querySelector("#frontSearchResults .front-qty-input")?.focus(),80);
+  return;
+ }
+ q.value=val;switchView("lookup");renderLookup();if(!getResults().length)renderNotFound(val);
+}
+async function startScanner(context="lookup"){
+ if(!("BarcodeDetector" in window)){alert("Camera barcode scanner is not supported in this browser. Try Android Chrome. Bluetooth scanner can still type into search.");return}
+ scannerContext=context||"lookup";scannerAccepting=false;
+ const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),status=document.getElementById("scannerStatus"),box=document.getElementById("scannerDetectionBox");
+ if(box){box.classList.remove("visible");box.removeAttribute("style")}
+ modal.hidden=false;status.textContent=scannerContext==="finalOrder"?"Point camera at a barcode to add it to Final Order.":"Point camera at barcode.";
+ try{
+  scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}}});video.srcObject=scannerStream;await video.play();
+  const detector=new BarcodeDetector({formats:["code_128","ean_13","upc_a","upc_e","ean_8"]});
+  scannerTimer=setInterval(async()=>{if(scannerAccepting)return;try{const codes=await detector.detect(video);if(!codes.length){box?.classList.remove("visible");return}const code=codes[0],val=code.rawValue;if(!val)return;scannerAccepting=true;positionScannerDetection(code);status.textContent=`Detected ${val}`;if(navigator.vibrate)navigator.vibrate(80);setTimeout(()=>{const target=scannerContext;stopScanner();handleScannerResult(val,target)},420)}catch{}},350);
+ }catch(e){status.textContent="Camera unavailable. Check permission/HTTPS."}
+}
+function stopScanner(){const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),box=document.getElementById("scannerDetectionBox");modal.hidden=true;if(scannerTimer)clearInterval(scannerTimer);scannerTimer=null;if(scannerStream)scannerStream.getTracks().forEach(t=>t.stop());scannerStream=null;video.srcObject=null;scannerAccepting=false;if(box){box.classList.remove("visible");box.removeAttribute("style")}}
+document.getElementById("scanBtn").onclick=()=>startScanner("lookup");document.getElementById("closeScannerBtn").onclick=stopScanner;
 const exportMissingBtn = document.getElementById("exportMissingBtn");
 if (exportMissingBtn) {
   exportMissingBtn.onclick = () => {
@@ -349,6 +705,9 @@ if (importMissingCsv) {
         unit: row.unit || "",
         category: row.category || "",
         organic: row.organic || row.type_quality || row.organic_type || "",
+        images: window.ImageLibrary?.normalizeImages(row) || [],
+        image_url: row.image_url || row.imageUrl || "",
+        image_local: row.image_local || row.image || "",
         notes: row.notes || row.note || "",
         date: row.date || new Date().toISOString()
       };
@@ -375,7 +734,13 @@ if (clearMissingBtn) {
   };
 }
 
-window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;document.getElementById("installBtn").hidden=false});document.getElementById("installBtn").onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById("installBtn").hidden=true}};if("serviceWorker" in navigator)navigator.serviceWorker.register("service-worker.js").then(r=>r.update?.()).catch(()=>{});
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;document.getElementById("installBtn").hidden=false});document.getElementById("installBtn").onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById("installBtn").hidden=true}};if(window.AppUpdateManager){
+  window.appUpdateManager=new AppUpdateManager({
+    versionsUrl:window.AppConfig?.urls?.versions,
+    currentVersion:window.AppConfig?.app?.version
+  });
+  window.appUpdateManager.init().catch(error=>console.warn("[App update]",error));
+}
 function initMobileBottomUI() {
   const isMobile = window.matchMedia("(max-width: 640px)").matches;
   document.body.classList.toggle("mobile-bottom-ui", isMobile);
@@ -408,6 +773,17 @@ initTopTools();
 initAdvancedToggle();loadInitialData();
 
 
+/* v52.2.2 Missing item multi-image editor */
+const missingImageEditor = window.ImageListEditor?.create({
+  root: "#missingImagesEditor",
+  input: "[data-image-input]",
+  addButton: "[data-image-add]",
+  list: "[data-image-list]",
+  count: "[data-image-count]",
+  legacyUrl: "#missingImageUrl",
+  legacyLocal: "#missingImageLocal"
+});
+
 /* Missing details form v7 fixed - additive overrides */
 (function(){
   function safeGetJSON(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}}
@@ -429,6 +805,7 @@ initAdvancedToggle();loadInitialData();
     document.getElementById("missingQuantity").value = row?.quantity || "";
     document.getElementById("missingUnit").value = row?.unit || "";
     document.getElementById("missingCategory").value = row?.category || "";
+    missingImageEditor?.setImages(row ? (window.ImageLibrary?.normalizeImages(row) || []) : []);
     {
       const organicValue = row?.organic || "Conventional";
       document.querySelectorAll('input[name="missingOrganic"]').forEach(r => {
@@ -465,6 +842,9 @@ initAdvancedToggle();loadInitialData();
       unit: formData.unit,
       category: formData.category,
       organic: formData.organic,
+      images: window.ImageLibrary?.normalizeImages([...(formData.images||[]),formData.image_local,formData.image_url]) || [],
+      image_url: formData.image_url,
+      image_local: formData.image_local,
       notes: formData.notes,
       date: formData.date || new Date().toISOString()
     };
@@ -566,6 +946,9 @@ initAdvancedToggle();loadInitialData();
         unit: document.getElementById("missingUnit").value.trim(),
         category: document.getElementById("missingCategory").value.trim(),
         organic: (document.querySelector('input[name="missingOrganic"]:checked')?.value || "Conventional").trim(),
+        image_url: document.getElementById("missingImageUrl").value.trim(),
+        image_local: document.getElementById("missingImageLocal").value.trim(),
+        images: missingImageEditor?.getImages() || window.ImageLibrary?.normalizeImages([document.getElementById("missingImageLocal").value.trim(),document.getElementById("missingImageUrl").value.trim()]) || [],
         notes: document.getElementById("missingNotes").value.trim()
       });
     });
@@ -576,10 +959,10 @@ initAdvancedToggle();loadInitialData();
     exportBtn.onclick = () => {
       const list = (typeof missingItems === "function") ? missingItems() : safeGetJSON(storeKey("missing"), []);
       const rows = [
-        "term,item_name,brand,quantity,unit,category,organic,notes,date",
+        "term,item_name,brand,quantity,unit,category,organic,images,image_url,image_local,notes,date",
         ...list.map(x => [
           x.term || "", x.item_name || "", x.brand || "", x.quantity || "",
-          x.unit || "", x.category || "", x.organic || "", x.notes || "", x.date || ""
+          x.unit || "", x.category || "", x.organic || "", window.ImageLibrary?.serializeImages(x)||"[]", x.image_url || "", x.image_local || "", x.notes || "", x.date || ""
         ].map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
       ];
       if (typeof downloadCSV === "function") downloadCSV("missing-items.csv", rows.join("\n"));
@@ -593,11 +976,11 @@ initAdvancedToggle();loadInitialData();
   function csvEscape(v){ return `"${String(v ?? "").replaceAll('"','""')}"`; }
 
   function itemRowsToCSV(rows){
-    const headers = ["item_name","code","quantity","brand","category","type","image_local","image_url","notes","aliases","search_keywords","organic"];
+    const headers = ["item_name","code","quantity","brand","category","type","images","image_local","image_url","notes","aliases","search_keywords","organic"];
     const lines = [headers.join(",")];
     rows.forEach(r => {
       const obj = normalize ? r : r;
-      const line = headers.map(h => csvEscape(obj[h] || "")).join(",");
+      const line = headers.map(h => csvEscape(h === "images" ? (window.ImageLibrary?.serializeImages(obj.images || obj) || "[]") : (obj[h] || ""))).join(",");
       lines.push(line);
     });
     return lines.join("\n");
@@ -613,6 +996,7 @@ initAdvancedToggle();loadInitialData();
         brand:x.brand || "",
         category:x.category || "",
         type:x.type || ((String(x.code).length > 6) ? "packaged" : "produce"),
+        images:window.ImageLibrary?.serializeImages(x)||"[]",
         image_local:x.image_local || "",
         image_url:x.image_url || "",
         notes:x.notes || "",
@@ -651,8 +1035,9 @@ initAdvancedToggle();loadInitialData();
       brand,
       category,
       type: String(code).length > 6 ? "packaged" : "produce",
-      image_local: "",
-      image_url: "",
+      images: window.ImageLibrary?.normalizeImages(row) || [],
+      image_local: row.image_local || "",
+      image_url: row.image_url || "",
       notes: row.notes || "",
       aliases,
       search_keywords: [itemName, code, quantityText, brand, category, organic, aliases].filter(Boolean).join(" ").toUpperCase(),
@@ -678,15 +1063,15 @@ initAdvancedToggle();loadInitialData();
 
     const existingCSV = currentItemsCSV();
     const newCSVLines = newRows.map(r => {
-      const headers = ["item_name","code","quantity","brand","category","type","image_local","image_url","notes","aliases","search_keywords","organic"];
-      return headers.map(h => csvEscape(r[h] || "")).join(",");
+      const headers = ["item_name","code","quantity","brand","category","type","images","image_local","image_url","notes","aliases","search_keywords","organic"];
+      return headers.map(h => csvEscape(h === "images" ? (window.ImageLibrary?.serializeImages(r.images || r) || "[]") : (r[h] || ""))).join(",");
     });
     const updatedCSV = existingCSV + "\n" + newCSVLines.join("\n");
 
     const hash = (typeof sha256Short === "function") ? await sha256Short(updatedCSV) : String(Date.now());
     localStorage.setItem(STORAGE_CSV, updatedCSV);
     localStorage.setItem(STORAGE_HASH, hash);
-    setItemsFromCSV(updatedCSV);
+    await productController.importCsv(updatedCSV);
 
     // remove promoted items from missing list
     setJSON(key("missing"), allMissing.filter(x => !terms.includes(String(x.term))));
@@ -734,7 +1119,9 @@ initAdvancedToggle();loadInitialData();
         row.term ? `Code/Search: ${row.term}` : ""
       ].filter(Boolean).join(" • ");
 
+      const missingImage = window.ImageLibrary?.primaryImage(row) || row.image_local || row.image_url || "";
       e.innerHTML = `
+        ${missingImage ? `<img class="missing-thumb" src="${String(missingImage).replaceAll('"','&quot;')}" alt="">` : ""}
         <div class="missing-row-head">
           <label class="missing-check"><input class="missing-select" type="checkbox" value=""> Select</label>
         </div>
@@ -753,6 +1140,8 @@ initAdvancedToggle();loadInitialData();
         </div>
       `;
 
+      const missingThumb=e.querySelector(".missing-thumb");
+      if(missingThumb) attachImageGallery(missingThumb,row);
       const check = e.querySelector(".missing-select");
       check.value = row.term || "";
       e.querySelector("h3").textContent = title;
@@ -793,7 +1182,7 @@ function isSeasonalItem(x){return truthy(x?.is_seasonal)||!!String(x?.season||""
 const oldNormalize=normalize;
 window.normalize=function(row){const x=oldNormalize(row);x.organic=row.organic||x.organic||(/(^ORG\b|ORGANIC)/i.test(x.item_name)?"Organic":"Conventional");x.is_archived=row.is_archived||row.archived||"";x.is_seasonal=row.is_seasonal||row.seasonal||"";x.season=row.season||"";x.festival=row.festival||"";return x};
 
-window.getResults=function(){let a=(items||[]).filter(x=>!isArchivedItem(x));const terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);if(filter==="produce")a=a.filter(x=>!isPackaged(x));if(filter==="packaged")a=a.filter(isPackaged);if(filter==="organic")a=a.filter(isOrg);if(filter==="seasonal")a=a.filter(isSeasonalItem);if(terms.length)a=a.filter(x=>terms.every(t=>x.hay.includes(t)||x.item_name.toLowerCase().includes(t)||x.code.toLowerCase().includes(t)||String(x.season||"").toLowerCase().includes(t)||String(x.festival||"").toLowerCase().includes(t)));return a.slice(0,100)};
+window.getResults=function(){return productService.search({query:q.value,filter,limit:100,isArchived:isArchivedItem,isSeasonal:isSeasonalItem,includeArchived:false})};
 
 window.archiveCatalogItem=function(code){const a=archivedCodes();if(!a.includes(String(code)))a.unshift(String(code));setArchivedCodes(a);renderAll();toast("Item archived")};
 window.restoreCatalogItem=function(code){setArchivedCodes(archivedCodes().filter(x=>x!==String(code)));renderAll();toast("Item restored")};
@@ -805,7 +1194,7 @@ window.renderArchive=function(){const box=document.getElementById("archiveResult
 
 const oldRenderAll=renderAll;window.renderAll=function(){oldRenderAll();renderArchive()};
 
-window.currentItemsCSV=function(){const headers=["item_name","code","quantity","brand","category","type","image_local","image_url","notes","aliases","search_keywords","organic","is_archived","is_seasonal","season","festival"];const lines=[headers.join(",")];(items||[]).forEach(x=>{const search=[x.item_name,x.code,x.quantity,x.brand,x.category,x.type,x.notes,x.aliases,x.organic,x.season,x.festival].filter(Boolean).join(" ").toUpperCase();const row={item_name:x.item_name||"",code:x.code||"",quantity:x.quantity||"",brand:x.brand||"",category:x.category||"",type:x.type||((String(x.code).length>6)?"packaged":"produce"),image_local:x.image_local||"",image_url:x.image_url||"",notes:x.notes||"",aliases:x.aliases||"",search_keywords:x.hay?x.hay.toUpperCase():search,organic:x.organic||(isOrg(x)?"Organic":"Conventional"),is_archived:isArchivedItem(x)?"Yes":"",is_seasonal:isSeasonalItem(x)?"Yes":"",season:x.season||"",festival:x.festival||""};lines.push(headers.map(h=>csvEscape(row[h]||"")).join(","))});return lines.join("\n")};
+window.currentItemsCSV=function(){const headers=["item_name","code","quantity","brand","category","type","images","image_local","image_url","notes","aliases","search_keywords","organic","is_archived","is_seasonal","season","festival"];const lines=[headers.join(",")];(items||[]).forEach(x=>{const search=[x.item_name,x.code,x.quantity,x.brand,x.category,x.type,x.notes,x.aliases,x.organic,x.season,x.festival].filter(Boolean).join(" ").toUpperCase();const row={item_name:x.item_name||"",code:x.code||"",quantity:x.quantity||"",brand:x.brand||"",category:x.category||"",type:x.type||((String(x.code).length>6)?"packaged":"produce"),images:window.ImageLibrary?.serializeImages(x)||"[]",image_local:x.image_local||"",image_url:x.image_url||"",notes:x.notes||"",aliases:x.aliases||"",search_keywords:x.hay?x.hay.toUpperCase():search,organic:x.organic||(isOrg(x)?"Organic":"Conventional"),is_archived:isArchivedItem(x)?"Yes":"",is_seasonal:isSeasonalItem(x)?"Yes":"",season:x.season||"",festival:x.festival||""};lines.push(headers.map(h=>csvEscape(row[h]||"")).join(","))});return lines.join("\n")};
 
 const exportItemsBtn=document.getElementById("exportItemsBtn");if(exportItemsBtn)exportItemsBtn.onclick=()=>downloadCSV("items.csv",currentItemsCSV());
 const exportArchiveBtn=document.getElementById("exportArchiveBtn");if(exportArchiveBtn)exportArchiveBtn.onclick=()=>{const h=["item_name","code","quantity","brand","category","organic","season","festival"];const lines=[h.join(","),...(items||[]).filter(isArchivedItem).map(x=>h.map(k=>csvEscape(x[k]||"")).join(","))];downloadCSV("archived-items.csv",lines.join("\n"))};
@@ -821,7 +1210,7 @@ renderAll();
   function csvEscape(v){ return `"${String(v ?? "").replaceAll('"','""')}"`; }
 
   function saveCurrentItemsToLocalStorage(rows){
-    const headers = ["item_name","code","quantity","brand","category","type","image_local","image_url","notes","aliases","search_keywords","organic","is_archived","is_seasonal","season","festival"];
+    const headers = ["item_name","code","quantity","brand","category","type","images","image_local","image_url","notes","aliases","search_keywords","organic","is_archived","is_seasonal","season","festival"];
     const lines = [headers.join(",")];
 
     rows.forEach(x => {
@@ -833,6 +1222,7 @@ renderAll();
         brand:x.brand||"",
         category:x.category||"",
         type:x.type||((String(x.code).length>6)?"packaged":"produce"),
+        images:window.ImageLibrary?.serializeImages(x)||"[]",
         image_local:x.image_local||"",
         image_url:x.image_url||"",
         notes:x.notes||"",
@@ -901,7 +1291,7 @@ renderAll();
         </div>
       `;
 
-      const src = x.image_local || x.image_url;
+      const src = primaryProductImage(x);
       if (src) {
         const img = document.createElement("img");
         img.className = "thumb";
@@ -909,6 +1299,7 @@ renderAll();
         img.src = src;
         img.onerror = () => {};
         e.querySelector(".thumb").replaceWith(img);
+        attachImageGallery(img,x);
       }
 
       e.querySelector(".name").textContent = x.item_name;
@@ -930,16 +1321,15 @@ renderAll();
     window.openMissingForm = function(term,index=""){
       oldOpenMissingFormV14(term,index);
       const row = index !== "" ? missingItems()[Number(index)] : null;
-      const imgUrl = document.getElementById("missingImageUrl");
-      if(imgUrl) imgUrl.value = row?.image_url || "";
-      const imgLocal = document.getElementById("missingImageLocal");
-      if(imgLocal) imgLocal.value = row?.image_local || "";
+      if (missingImageEditor) missingImageEditor.setImages(row ? (window.ImageLibrary?.normalizeImages(row) || []) : []);
     };
   }
 
   const oldSaveMissingDetailsV14 = window.saveMissingDetails;
   if(oldSaveMissingDetailsV14){
     window.saveMissingDetails = function(formData){
+      const editorImages = missingImageEditor?.getImages() || formData.images || [];
+      formData.images = window.ImageLibrary?.normalizeImages(editorImages) || [];
       formData.image_url = document.getElementById("missingImageUrl")?.value.trim() || "";
       formData.image_local = document.getElementById("missingImageLocal")?.value.trim() || "";
       oldSaveMissingDetailsV14(formData);
@@ -964,10 +1354,10 @@ renderAll();
   if(exportMissingBtn){
     exportMissingBtn.onclick = () => {
       const rows = [
-        "term,item_name,brand,quantity,unit,category,organic,is_seasonal,season,festival,image_url,image_local,notes,date",
+        "term,item_name,brand,quantity,unit,category,organic,is_seasonal,season,festival,images,image_url,image_local,notes,date",
         ...missingItems().map(x => [
           x.term||"", x.item_name||"", x.brand||"", x.quantity||"", x.unit||"", x.category||"",
-          x.organic||"", x.is_seasonal||"", x.season||"", x.festival||"",
+          x.organic||"", x.is_seasonal||"", x.season||"", x.festival||"", window.ImageLibrary?.serializeImages(x)||"[]",
           x.image_url||"", x.image_local||"", x.notes||"", x.date||""
         ].map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
       ];
@@ -1489,6 +1879,23 @@ renderAll();
     tip.style.left=left+"px"; tip.style.top=Math.max(pad,top)+"px";
   }
 
+  // Shared by fixed-page headers (such as Lookup) so every info button uses the same tooltip UI.
+  window.showSectionInfoTooltip = showTip;
+
+  function setupReplaceCatalogInfo(){
+    const button=document.getElementById("replaceCatalogInfoBtn");
+    if(!button || button.dataset.tooltipReady==="1") return;
+    button.dataset.tooltipReady="1";
+    button.addEventListener("click",e=>{
+      e.preventDefault();
+      e.stopPropagation();
+      showTip(
+        "Replace Local Catalog affects only this device's local store catalog. It does not update the shared master catalog or any other store. Existing local products that are not in the uploaded CSV will be removed.",
+        button
+      );
+    });
+  }
+
   function setupHeader(head){
     const h2=head?.querySelector("h2"), p=head?.querySelector("p"), actions=head?.querySelector(".order-actions");
     if(!h2) return;
@@ -1535,7 +1942,7 @@ renderAll();
     });
   }
 
-  function apply(){setupHeaders(); stepper(); cards();}
+  function apply(){setupHeaders(); setupReplaceCatalogInfo(); stepper(); cards();}
   ready(()=>{
     apply();
     const targets=["results","favoritesResults","recentResults","archiveResults","missingResults","orderResults"].map(id=>document.getElementById(id)).filter(Boolean);
@@ -1590,7 +1997,12 @@ function resultCard(item){
 window.renderFrontSearchResults=function(){
  const q=document.getElementById("frontQ"), box=document.getElementById("frontSearchResults"); if(!q||!box)return;
  const query=q.value.trim(); box.innerHTML="";
- if(!query){box.innerHTML='<section class="message compact-msg">Search or scan an item to enter final order quantity.</section>';return}
+ if(!query){
+  if(!frontStock().length){
+   box.innerHTML='<section class="message compact-msg final-order-empty-guide"><strong>Start today’s Final Order</strong><span>Search or scan a product, then enter the quantity you want to order. Your saved Back Stock quantity will appear beside it.</span></section>';
+  }
+  return;
+ }
  const arr=matches(query);
  if(!arr.length){
   const m=document.createElement("section"); m.className="message compact-msg";
@@ -1603,7 +2015,7 @@ window.renderFrontSearchResults=function(){
 window.renderFrontStock=function(){
  const box=document.getElementById("frontStockResults"); if(!box)return; box.innerHTML="";
  const list=frontStock();
- if(!list.length){box.innerHTML='<section class="message">No final order items yet. Search or scan items above.</section>';return}
+ if(!list.length){return}
  list.forEach(row=>{
   const e=document.createElement("article"); e.className="order-item front-stock-item";
   e.innerHTML='<div class="order-row"><div><h3></h3><div class="code"></div><div class="front-meta"><span class="back-stock-chip">Back: <b></b></span><span class="front-stock-chip">Front: <b></b></span></div></div><button type="button" class="danger remove-front">Remove</button></div>';
@@ -1630,7 +2042,7 @@ ready(function(){
  const start=document.getElementById("startFrontStockBtn"); if(start)start.onclick=()=>switchView("frontStock");
  const back=document.getElementById("backToBackStockBtn"); if(back)back.onclick=()=>switchView("order");
  const q=document.getElementById("frontQ"); if(q)q.addEventListener("input",renderFrontSearchResults);
- const scan=document.getElementById("frontScanBtn"); if(scan)scan.onclick=()=>{document.getElementById("scanBtn")?.click();toast("Scan code, then search it in Final Order")};
+ const scan=document.getElementById("frontScanBtn"); if(scan)scan.onclick=()=>startScanner("finalOrder");
  const ex=document.getElementById("exportFrontStockBtn"); if(ex)ex.onclick=exportFront;
  const comb=document.getElementById("exportCombinedStockBtn"); if(comb)comb.onclick=exportCombined;
  const clr=document.getElementById("clearFrontStockBtn"); if(clr)clr.onclick=()=>{if(confirm("Clear final order list?")){setFrontStock([]);renderFrontStock();renderFrontSearchResults()}};
@@ -1642,29 +2054,94 @@ ready(function(){
 /* v27 left drawer + workflow shell */
 (function(){
 function ready(f){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",f,{once:true}):f()}
-function status(){return localStorage.getItem(key("order_status"))||"Draft"}
-function setStatus(s){localStorage.setItem(key("order_status"),s);summary();lockState()}
+function status(){return currentOrderStatus()}
+function setStatus(s){setCurrentOrderStatus(s);summary();lockState()}
 function finalList(){try{return getJSON(key("front_stock"),[])}catch{return[]}}
 function openDrawer(){let d=document.getElementById("appDrawer"),b=document.getElementById("drawerBackdrop");if(!d)return;d.classList.add("open");d.setAttribute("aria-hidden","false");if(b)b.hidden=false;document.body.classList.add("drawer-open")}
 function closeDrawer(){let d=document.getElementById("appDrawer"),b=document.getElementById("drawerBackdrop");if(!d)return;d.classList.remove("open");d.setAttribute("aria-hidden","true");if(b)b.hidden=true;document.body.classList.remove("drawer-open")}
 function tools(){closeDrawer();let p=document.getElementById("topToolsPanel");if(p){p.hidden=false;p.style.display="flex";document.body.classList.add("tools-open")}}
 function go(v){closeDrawer();switchView(v);setTimeout(summary,50)}
+function dashboardDateLabel(){
+ const d=new Date();
+ return d.toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"});
+}
+function renderDashboardRecentProducts(){
+ const box=document.getElementById("dashRecentProducts"); if(!box)return;
+ const recentItems=(typeof byCodes==="function"?byCodes(recents()):[]).slice(0,4);
+ box.innerHTML="";
+ if(!recentItems.length){box.innerHTML='<div class="dashboard-empty-mini">No recent products yet. Search or scan an item and it will appear here.</div>';return}
+ recentItems.forEach(item=>{
+  const row=document.createElement("button"); row.type="button"; row.className="dashboard-recent-row";
+  const image=primaryProductImage(item);
+  row.innerHTML=`<span class="dashboard-recent-thumb">${image?`<img src="${image}" alt="${item.item_name||item.name||"Product"}">`:'<span aria-hidden="true">▧</span>'}</span><span class="dashboard-recent-copy"><b>${item.name||item.item_name||"Product"}</b><small>${item.brand?item.brand+" • ":""}PLU ${item.code||"—"}</small></span><span class="dashboard-recent-arrow">›</span>`;
+  if(image){const recentImg=row.querySelector(".dashboard-recent-thumb img");attachImageGallery(recentImg,item)}
+  row.onclick=()=>{if(q){q.value=item.code||item.name||""}go("lookup")};
+  box.appendChild(row);
+ });
+}
+function renderDashboardAttention(miss){
+ const box=document.getElementById("dashAttentionList"); if(!box)return;
+ box.innerHTML="";
+ const notices=[];
+ if(miss>0) notices.push({icon:"!",tone:"danger",title:`${miss} missing item${miss===1?"":"s"}`,text:"Review products that could not be found.",action:()=>go("missing")});
+ const catalogCard=document.getElementById("catalogUpdateCard");
+ if(catalogCard?.dataset?.status==="available") notices.push({icon:"↻",tone:"warning",title:"Catalog update available",text:"New product data is ready to download.",action:()=>go("dataTools")});
+ const appBanner=document.getElementById("appUpdateBanner");
+ if(appBanner && !appBanner.hidden) notices.push({icon:"↑",tone:"info",title:"App update available",text:"A newer app version is ready to install.",action:()=>appBanner.scrollIntoView({behavior:"smooth",block:"start"})});
+ if(!notices.length){box.innerHTML='<div class="dashboard-all-clear"><span>✓</span><div><b>All caught up</b><small>No urgent items need attention.</small></div></div>';return}
+ notices.forEach(n=>{const b=document.createElement("button");b.type="button";b.className=`dashboard-attention-row is-${n.tone}`;b.innerHTML=`<span class="dashboard-attention-icon">${n.icon}</span><span><b>${n.title}</b><small>${n.text}</small></span><span class="dashboard-recent-arrow">›</span>`;b.onclick=n.action;box.appendChild(b)});
+}
+function renderDashboardRecentOrders(){
+ const box=document.getElementById("dashRecentOrders"); if(!box)return;
+ const history=getJSON(key("order_history"),[]).slice(0,4);
+ box.innerHTML="";
+ if(!history.length){box.innerHTML='<div class="dashboard-empty-mini">No placed orders yet. Completed orders will appear here.</div>';return}
+ history.forEach(h=>{
+  const d=new Date((h.date||"")+"T12:00:00");
+  const dateLabel=Number.isNaN(d.getTime())?(h.date||"Order"):d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
+  const row=document.createElement("button");row.type="button";row.className="dashboard-order-history-row";
+  row.innerHTML=`<span><b>${dateLabel}</b><small>${(h.backStock||[]).length} back stock • ${(h.finalOrder||[]).length} order items</small></span><span class="dashboard-history-status">${h.status||"Placed"}</span><span class="dashboard-recent-arrow">›</span>`;
+  row.onclick=()=>go("orders"); box.appendChild(row);
+ });
+}
+function renderDashboardWorkflow(back,fin,miss,st){
+ const date=document.getElementById("dashBusinessDate"); if(date)date.textContent=dashboardDateLabel();
+ const greeting=document.getElementById("dashGreeting"); if(greeting){const hr=new Date().getHours();greeting.textContent=hr<12?"Good morning":hr<17?"Good afternoon":"Good evening"}
+ const hero=document.getElementById("dashHeroStatus"); if(hero){hero.textContent=st;hero.className=`dashboard-status-pill ${st==="Placed"?"status-placed":"status-draft"}`}
+ const steps=document.querySelectorAll("[data-dash-step]"); steps.forEach(x=>x.classList.remove("is-active","is-done"));
+ const backStep=document.querySelector('[data-dash-step="back"]'),finalStep=document.querySelector('[data-dash-step="final"]'),placedStep=document.querySelector('[data-dash-step="placed"]');
+ if(st==="Placed"){backStep?.classList.add("is-done");finalStep?.classList.add("is-done");placedStep?.classList.add("is-done","is-active")}
+ else if(fin>0){backStep?.classList.add("is-done");finalStep?.classList.add("is-active")}
+ else{backStep?.classList.add("is-active")}
+ const primary=document.getElementById("dashContinuePrimaryBtn"); if(primary){primary.textContent=fin>0?"Continue Final Order":back>0?"Continue Back Stock":"Start Back Stock";primary.disabled=st==="Placed";primary.onclick=()=>go(fin>0?"frontStock":"order")}
+ const place=document.getElementById("dashMarkPlacedBtn"); if(place){place.hidden=st==="Placed";place.disabled=fin===0}
+ renderDashboardAttention(miss); renderDashboardRecentProducts(); renderDashboardRecentOrders();
+}
 window.refreshWorkflowSummary=summary;
 function summary(){
  let back=(typeof order==="function"?order():[]).length, fin=finalList().length, miss=(typeof missingItems==="function"?missingItems():[]).length, st=status();
  [["dashBackCount",back],["orderBackCount",back],["dashFinalCount",fin],["orderFinalCount",fin],["dashMissingCount",miss]].forEach(([i,v])=>{let e=document.getElementById(i);if(e)e.textContent=v});
  ["dashOrderStatus","orderSessionStatus"].forEach(i=>{let e=document.getElementById(i);if(e){e.textContent=st;e.className=st==="Placed"?"status-placed":"status-draft"}});
+ renderDashboardWorkflow(back,fin,miss,st);
 }
 function lockState(){let locked=status()==="Placed";document.body.classList.toggle("order-locked",locked);document.querySelectorAll("#orderView input,#orderView button,#frontStockView input,#frontStockView button").forEach(el=>{if(el.id==="unlockOrderBtn"||el.id==="backToBackStockBtn")return;el.disabled=locked})}
 ready(function(){
  document.getElementById("drawerBtn")?.addEventListener("click",openDrawer);
  document.getElementById("closeDrawerBtn")?.addEventListener("click",closeDrawer);
  document.getElementById("drawerBackdrop")?.addEventListener("click",closeDrawer);
- document.querySelectorAll("[data-drawer-action]").forEach(btn=>btn.onclick=()=>{let a=btn.dataset.drawerAction;if(a==="dashboard")go("dashboard");else if(a==="orders"||a==="today-order")go("orders");else if(a==="inventory")go("inventory");else if(a==="missing")go("missing");else if(a==="archive")go("archive");else if(a==="data-tools")tools()});
+ document.querySelectorAll("[data-drawer-action]").forEach(btn=>btn.onclick=()=>{let a=btn.dataset.drawerAction;if(a==="dashboard")go("dashboard");else if(a==="lookup")go("lookup");else if(a==="back-stock")go("order");else if(a==="final-order")go("frontStock");else if(a==="favorites")go("favorites");else if(a==="recent")go("recent");else if(a==="orders"||a==="today-order")go("orders");else if(a==="inventory")go("inventory");else if(a==="missing")go("missing");else if(a==="archive")go("archive");else if(a==="data-tools")go("dataTools")});
+ document.getElementById("mobileMoreBtn")?.addEventListener("click",openDrawer);
+ document.getElementById("dataToolsBackBtn")?.addEventListener("click",()=>{if(window.history.length>1)window.history.back();else go("dashboard")});
  document.getElementById("dashGoOrderBtn")?.addEventListener("click",()=>go("orders"));
  document.getElementById("dashGoStockBtn")?.addEventListener("click",()=>go("order"));
  document.getElementById("dashGoFinalBtn")?.addEventListener("click",()=>go("frontStock"));
  document.getElementById("dashGoMissingBtn")?.addEventListener("click",()=>go("missing"));
+ document.getElementById("dashGoLookupBtn")?.addEventListener("click",()=>go("lookup"));
+ document.getElementById("dashQuickBackStockBtn")?.addEventListener("click",()=>go("order"));
+ document.getElementById("dashQuickOrderBtn")?.addEventListener("click",()=>go("frontStock"));
+ document.getElementById("dashGoRecentBtn")?.addEventListener("click",()=>go("recent"));
+ document.getElementById("dashViewAllRecentBtn")?.addEventListener("click",()=>go("recent"));
+ document.getElementById("dashGoHistoryBtn")?.addEventListener("click",()=>go("orders"));
  document.getElementById("continueOrderBtn")?.addEventListener("click",()=>go("order"));
  document.getElementById("ordersBackStockBtn")?.addEventListener("click",()=>go("order"));
  document.getElementById("ordersFinalOrderBtn")?.addEventListener("click",()=>go("frontStock"));
@@ -1682,14 +2159,23 @@ ready(function(){
 (function(){
 function ready(f){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",f,{once:true}):f()}
 function esc(v){return `"${String(v??"").replaceAll('"','""')}"`}
-function todayKey(){return new Date().toISOString().slice(0,10)}
+function todayKey(){return businessDate()}
 function orderHistory(){return getJSON(key("order_history"),[])}
 function setOrderHistory(v){setJSON(key("order_history"),v)}
 function finalList(){try{return getJSON(key("front_stock"),[])}catch{return[]}}
-function status(){return localStorage.getItem(key("order_status"))||"Draft"}
-function setStatus(s){localStorage.setItem(key("order_status"),s); if(window.refreshWorkflowSummary) window.refreshWorkflowSummary(); renderOrderHistory(); applyLock();}
+function status(){return currentOrderStatus()}
+function setStatus(s){setCurrentOrderStatus(s); if(window.refreshWorkflowSummary) window.refreshWorkflowSummary(); renderOrderHistory(); applyLock(); if(typeof renderLookup==="function") renderLookup();}
 function applyLock(){document.body.classList.toggle("order-locked",status()==="Placed")}
+function canPlaceCurrentOrder(){
+ const final=finalList();
+ if(!final.length){
+  toast("Add at least one item to Final Order before placing the order");
+  return false;
+ }
+ return true;
+}
 function snapshotOrder(){
+ if(!canPlaceCurrentOrder()) return false;
  const date=todayKey();
  const back=(typeof order==="function"?order():[]);
  const final=finalList();
@@ -1699,6 +2185,7 @@ function snapshotOrder(){
  setOrderHistory(hist.slice(0,100));
  setStatus("Placed");
  toast("Order placed and saved to history");
+ return true;
 }
 function exportHistoryOrder(id){
  const h=orderHistory().find(x=>x.id===id); if(!h)return;
@@ -1709,18 +2196,155 @@ function exportHistoryOrder(id){
 }
 window.renderOrderHistory=function(){
  const boxes=[document.getElementById("orderHistoryResults"),document.getElementById("ordersHistoryInline")].filter(Boolean);
- const hist=orderHistory();
+ const currentDate=todayKey();
+ const current={
+  id:`current-${currentDate}`,
+  date:currentDate,
+  placedAt:status()==="Placed"?new Date().toISOString():null,
+  status:status(),
+  backStock:typeof order==="function"?order():[],
+  finalOrder:finalList(),
+  isCurrent:true
+ };
+ const historical=orderHistory().filter(row=>row.date!==currentDate);
+ const rows=[current,...historical];
+ const PAGE_SIZE=15;
+
  boxes.forEach(box=>{
   box.innerHTML="";
-  if(!hist.length){box.innerHTML='<section class="message compact-msg">No placed orders yet.</section>';return}
-  hist.forEach(h=>{
-    const e=document.createElement("article"); e.className="history-card";
-    e.innerHTML=`<div><h3></h3><p></p><div class="history-meta"><span>Back: <b></b></span><span>Final: <b></b></span></div></div><button type="button">Export</button>`;
-    e.querySelector("h3").textContent=new Date(h.placedAt||h.date).toLocaleDateString();
-    e.querySelector("p").textContent=`Placed ${h.placedAt?new Date(h.placedAt).toLocaleTimeString():""}`;
-    e.querySelector(".history-meta b").textContent=(h.backStock||[]).length;
-    e.querySelectorAll(".history-meta b")[1].textContent=(h.finalOrder||[]).length;
-    e.querySelector("button").onclick=()=>exportHistoryOrder(h.id);
+  rows.forEach(h=>{
+    const e=document.createElement("article");
+    e.className="history-card history-card-expandable";
+    const detailId=`history-detail-${String(h.id).replace(/[^a-zA-Z0-9_-]/g,"-")}-${Math.random().toString(36).slice(2,7)}`;
+    e.innerHTML=`<button type="button" class="history-card-summary" aria-expanded="false" aria-controls="${detailId}"><span class="history-date-tile" aria-hidden="true"><b class="history-day"></b><small class="history-month"></small></span><span class="history-summary-copy"><span class="history-title-row"><strong class="history-title"></strong><span class="history-status-badge"></span></span><span class="history-subtitle"></span><span class="history-counts"><span><b class="history-back-count"></b><small>Back Stock</small></span><span><b class="history-final-count"></b><small>Final Order</small></span></span></span><span class="history-summary-action"><small>View details</small><span class="history-toggle" aria-hidden="true">⌄</span></span></button><div id="${detailId}" class="history-detail" hidden><div class="history-detail-tabs" role="tablist" aria-label="Order history details"><button type="button" class="history-detail-tab" data-history-tab="back" role="tab"><span>Back Stock</span><b class="history-tab-back-count"></b></button><button type="button" class="history-detail-tab is-active" data-history-tab="final" role="tab"><span>Final Order</span><b class="history-tab-final-count"></b></button></div><div class="history-detail-toolbar"><label class="history-search-wrap"><span aria-hidden="true">⌕</span><input type="search" class="history-search" placeholder="Search by item name, PLU or quantity" autocomplete="off" aria-label="Search order history"></label></div><div class="history-detail-table-head" aria-hidden="true"><span>Product</span><span>PLU</span><span>Qty</span></div><div class="history-active-list"></div><div class="history-pagination" hidden><button type="button" class="history-page-prev">Previous</button><span class="history-page-info"></span><button type="button" class="history-page-next">Next</button></div><div class="history-detail-footer"><span class="history-result-count"></span><button type="button" class="history-export-btn">Export CSV</button></div></div>`;
+
+    const dateObj=new Date(`${h.date}T12:00:00`);
+    const statusText=String(h.status||"Placed");
+    e.querySelector(".history-day").textContent=dateObj.toLocaleDateString(undefined,{day:"2-digit"});
+    e.querySelector(".history-month").textContent=dateObj.toLocaleDateString(undefined,{month:"short"}).toUpperCase();
+    e.querySelector(".history-title").textContent=h.isCurrent?"Today’s order":dateObj.toLocaleDateString(undefined,{weekday:"long"});
+    e.querySelector(".history-subtitle").textContent=h.isCurrent
+      ? dateObj.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric",year:"numeric"})
+      : `Placed ${h.placedAt?new Date(h.placedAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):""}`.trim();
+    const badge=e.querySelector(".history-status-badge");
+    badge.textContent=statusText;
+    badge.classList.toggle("is-draft",statusText.toLowerCase()==="draft");
+    badge.classList.toggle("is-placed",statusText.toLowerCase()==="placed");
+    const backList=Array.isArray(h.backStock)?h.backStock:[];
+    const finalListRows=Array.isArray(h.finalOrder)?h.finalOrder:[];
+    e.querySelector(".history-back-count").textContent=backList.length;
+    e.querySelector(".history-final-count").textContent=finalListRows.length;
+    e.querySelector(".history-tab-back-count").textContent=backList.length;
+    e.querySelector(".history-tab-final-count").textContent=finalListRows.length;
+
+    const state={tab:"final",query:"",page:1};
+    const activeList=e.querySelector(".history-active-list");
+    const search=e.querySelector(".history-search");
+    const pagination=e.querySelector(".history-pagination");
+    const prev=e.querySelector(".history-page-prev");
+    const next=e.querySelector(".history-page-next");
+    const pageInfo=e.querySelector(".history-page-info");
+    const resultCount=e.querySelector(".history-result-count");
+    const tabButtons=[...e.querySelectorAll(".history-detail-tab")];
+
+    const normalize=v=>String(v??"").toLowerCase().trim();
+    const sourceForTab=()=>state.tab==="back"?backList:finalListRows;
+    const filterRows=list=>{
+      const q=normalize(state.query);
+      if(!q)return list;
+      return list.filter(row=>{
+        const name=normalize(row.item_name||row.name||"");
+        const code=normalize(row.code||row.plu||row.product_code||"");
+        const qty=normalize(row.qty??row.quantity??"");
+        return name.includes(q)||code.includes(q)||qty.includes(q);
+      });
+    };
+    const renderRows=()=>{
+      const source=sourceForTab();
+      const filtered=filterRows(source);
+      const totalPages=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE));
+      if(state.page>totalPages)state.page=totalPages;
+      const start=(state.page-1)*PAGE_SIZE;
+      const pageRows=filtered.slice(start,start+PAGE_SIZE);
+      activeList.innerHTML="";
+      if(!pageRows.length){
+        const empty=document.createElement("p");
+        empty.className="history-empty";
+        empty.textContent=state.query?"No matching items found.":(state.tab==="back"?"No Back Stock recorded.":"No Final Order recorded.");
+        activeList.appendChild(empty);
+      }else{
+        pageRows.forEach(row=>{
+          const line=document.createElement("div");
+          line.className="history-item-row";
+          line.innerHTML='<span class="history-item-name"></span><span class="history-item-code"></span><strong class="history-item-qty"></strong>';
+          line.querySelector(".history-item-name").textContent=row.item_name||row.name||row.code||"Item";
+          line.querySelector(".history-item-code").textContent=row.code||row.plu||row.product_code||"";
+          line.querySelector(".history-item-qty").textContent=row.qty??row.quantity??"0";
+          activeList.appendChild(line);
+        });
+      }
+      const first=filtered.length?start+1:0;
+      const last=Math.min(start+PAGE_SIZE,filtered.length);
+      resultCount.textContent=state.query
+        ? `Showing ${first}–${last} of ${filtered.length} matching ${state.tab==="back"?"Back Stock":"Final Order"} items`
+        : `Showing ${first}–${last} of ${filtered.length} ${state.tab==="back"?"Back Stock":"Final Order"} items`;
+      pageInfo.textContent=`Page ${state.page} of ${totalPages}`;
+      prev.disabled=state.page<=1;
+      next.disabled=state.page>=totalPages;
+      pagination.hidden=totalPages<=1;
+    };
+    const setTab=tab=>{
+      state.tab=tab;
+      state.query="";
+      state.page=1;
+      search.value="";
+      tabButtons.forEach(btn=>{
+        const active=btn.dataset.historyTab===tab;
+        btn.classList.toggle("is-active",active);
+        btn.setAttribute("aria-selected",String(active));
+      });
+      renderRows();
+    };
+    tabButtons.forEach(btn=>btn.addEventListener("click",()=>setTab(btn.dataset.historyTab)));
+    search.addEventListener("input",()=>{state.query=search.value;state.page=1;renderRows()});
+    prev.addEventListener("click",()=>{if(state.page>1){state.page--;renderRows();}});
+    next.addEventListener("click",()=>{state.page++;renderRows();});
+    renderRows();
+
+    const summary=e.querySelector(".history-card-summary");
+    const detail=e.querySelector(".history-detail");
+    summary.onclick=()=>{
+      const open=summary.getAttribute("aria-expanded")==="true";
+      if(!open){
+        box.querySelectorAll('.history-card-summary[aria-expanded="true"]').forEach(other=>{
+          if(other===summary)return;
+          other.setAttribute("aria-expanded","false");
+          const otherDetail=document.getElementById(other.getAttribute("aria-controls"));
+          if(otherDetail) otherDetail.hidden=true;
+          const otherCard=other.closest(".history-card-expandable");
+          if(otherCard){
+            const toggle=otherCard.querySelector(".history-toggle");
+            const label=otherCard.querySelector(".history-summary-action small");
+            if(toggle) toggle.textContent="⌄";
+            if(label) label.textContent="View details";
+          }
+        });
+      }
+      summary.setAttribute("aria-expanded",String(!open));
+      detail.hidden=open;
+      e.querySelector(".history-toggle").textContent=open?"⌄":"⌃";
+      const actionLabel=e.querySelector(".history-summary-action small");
+      if(actionLabel) actionLabel.textContent=open?"View details":"Hide details";
+      if(!open){ state.query=""; state.page=1; search.value=""; renderRows(); }
+    };
+    e.querySelector(".history-export-btn").onclick=()=>{
+      if(h.isCurrent){
+        const exportRows=["section,item_name,code,quantity"];
+        backList.forEach(x=>exportRows.push(["Back Stock",x.item_name||"",x.code||"",x.qty||""].map(esc).join(",")));
+        finalListRows.forEach(x=>exportRows.push(["Final Order",x.item_name||"",x.code||"",x.qty||""].map(esc).join(",")));
+        downloadCSV(`order-${h.date}.csv`,exportRows.join("\n"));
+      }else exportHistoryOrder(h.id);
+    };
     box.appendChild(e);
   });
  });
@@ -1738,7 +2362,7 @@ ready(function(){
 
  document.getElementById("unlockOrderBtn")?.addEventListener("click",e=>{
    e.stopImmediatePropagation();
-   if(confirm("Unlock today's order as Draft?")) setStatus("Draft");
+   if(confirm("Adjust today's placed order? This will unlock both Back Stock and Final Order for editing. When finished, place the order again to save the revised record.")) { setStatus("Draft"); toast("Order unlocked for adjustment"); }
  }, true);
 
  renderOrderHistory();
@@ -1751,19 +2375,16 @@ ready(function(){
 /* v29 dashboard grid + easier Mark Placed */
 (function(){
 function ready(f){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",f,{once:true}):f()}
-function status(){return localStorage.getItem(key("order_status"))||"Draft"}
-function setStatus(s){localStorage.setItem(key("order_status"),s); if(window.refreshWorkflowSummary) window.refreshWorkflowSummary(); if(window.renderOrderHistory) window.renderOrderHistory();}
+function status(){return currentOrderStatus()}
+function setStatus(s){setCurrentOrderStatus(s); if(window.refreshWorkflowSummary) window.refreshWorkflowSummary(); if(window.renderOrderHistory) window.renderOrderHistory(); if(typeof renderLookup==="function") renderLookup();}
 function finalList(){try{return getJSON(key("front_stock"),[])}catch{return[]}}
 function snapshotOrderV29(){
  if(status()==="Placed"){toast("Order already placed");return}
  const back=(typeof order==="function"?order():[]);
  const final=finalList();
- if(!back.length && !final.length){
-   if(!confirm("Back Stock and Final Order are empty. Mark empty order as placed?")) return;
- } else {
-   if(!confirm("Mark today’s order as placed? This will save it by date and lock editing.")) return;
- }
- const date=new Date().toISOString().slice(0,10);
+ if(!final.length){toast("Add at least one item to Final Order before placing the order");return;}
+ if(!confirm("Mark today’s order as placed? This will save it by date and lock editing.")) return;
+ const date=businessDate();
  const hist=getJSON(key("order_history"),[]).filter(x=>x.date!==date);
  hist.unshift({id:date+"-"+Date.now(),date,placedAt:new Date().toISOString(),status:"Placed",backStock:back,finalOrder:final});
  setJSON(key("order_history"),hist.slice(0,100));
@@ -1778,14 +2399,25 @@ ready(function(){
  if(quickBtn) quickBtn.onclick=snapshotOrderV29;
  const oldBtn=document.getElementById("markOrderPlacedBtn");
  if(oldBtn) oldBtn.onclick=snapshotOrderV29;
+ const finalPlaceBtn=document.getElementById("finalPlaceOrderBtn");
+ if(finalPlaceBtn) finalPlaceBtn.onclick=snapshotOrderV29;
 
  function updatePlacedButtons(){
    const placed=status()==="Placed";
-   [dashBtn,quickBtn,oldBtn].filter(Boolean).forEach(b=>{
+   const hasFinalItems=finalList().length>0;
+   [dashBtn,quickBtn,oldBtn,finalPlaceBtn].filter(Boolean).forEach(b=>{
      b.disabled=placed;
-     if(b===dashBtn){
-       b.querySelector("small").textContent=placed ? "Already placed" : "Lock today’s order";
-       b.querySelector(".dash-circle").textContent=placed ? "🔒" : "✅";
+     if(b===finalPlaceBtn){
+       b.disabled=placed || !hasFinalItems;
+       b.textContent=placed ? "Placed" : "Place Order";
+     } else if(b===dashBtn){
+       // v52 dashboard uses a plain button (no nested <small> / .dash-circle).
+       // Keep this legacy status updater compatible with both old and new markup.
+       const label=b.querySelector("small");
+       const icon=b.querySelector(".dash-circle");
+       if(label) label.textContent=placed ? "Already placed" : "Lock today’s order";
+       else b.textContent=placed ? "Placed" : "Place Order";
+       if(icon) icon.textContent=placed ? "🔒" : "✅";
      } else {
        b.textContent=placed ? "Placed" : "Mark Placed";
      }
@@ -1800,14 +2432,14 @@ ready(function(){
 /* v30 order lock + sticky headers + workflow back buttons */
 (function(){
 function ready(f){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",f,{once:true}):f()}
-function status(){return localStorage.getItem(key("order_status"))||"Draft"}
+function status(){return currentOrderStatus()}
 function isPlaced(){return status()==="Placed"}
 function goOrders(){ if(typeof switchView==="function") switchView("orders"); }
 
 function applyOrderLockV30(){
   const locked=isPlaced();
   document.body.classList.toggle("order-locked",locked);
-  document.querySelectorAll("#orderView input,#orderView .qty-step,#orderView .danger,#orderView .remove-order,#frontStockView input,#frontStockView .qty-step,#frontStockView .remove-front,#frontStockView .danger,#frontStockView #frontScanBtn").forEach(el=>{
+  document.querySelectorAll("#orderView input,#orderView .qty-step,#orderView .edit-order-qty,#orderView .danger,#orderView .remove-order,#frontStockView input,#frontStockView .qty-step,#frontStockView .remove-front,#frontStockView .danger,#frontStockView #frontScanBtn").forEach(el=>{
     el.disabled=locked;
     el.setAttribute("aria-disabled",String(locked));
   });
@@ -1845,7 +2477,7 @@ function addBackButtons(){
 function blockPlacedEdits(){
   document.addEventListener("click",function(e){
     if(!isPlaced()) return;
-    const blocked=e.target.closest("#orderView .qty-step,#orderView .danger,#orderView .remove-order,#frontStockView .qty-step,#frontStockView .remove-front,#frontStockView .danger,#frontStockView #frontScanBtn");
+    const blocked=e.target.closest("#orderView .qty-step,#orderView .edit-order-qty,#orderView .danger,#orderView .remove-order,#frontStockView .qty-step,#frontStockView .remove-front,#frontStockView .danger,#frontStockView #frontScanBtn");
     if(blocked){
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
       toast("Order is placed and locked");
@@ -1864,7 +2496,7 @@ ready(function(){
   addBackButtons();
   applyOrderLockV30();
   blockPlacedEdits();
-  ["dashMarkPlacedBtn","ordersQuickMarkPlacedBtn","markOrderPlacedBtn","unlockOrderBtn"].forEach(id=>{
+  ["dashMarkPlacedBtn","ordersQuickMarkPlacedBtn","markOrderPlacedBtn","finalPlaceOrderBtn","unlockOrderBtn"].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.addEventListener("click",()=>setTimeout(()=>{applyOrderLockV30();addBackButtons();},150),true);
   });
@@ -1999,8 +2631,15 @@ window.applyOrderLockV30=applyOrderLockV30;
     title.hidden = !(active && active.id === "lookupView");
   }
 
-  function showLookupInfo(){
+  function showLookupInfo(event){
+    event?.preventDefault();
+    event?.stopPropagation();
+    const button = document.getElementById("lookupInfoBtn");
     const msg = "Search, scan, and quickly add items to Back Stock or Favorites.";
+    if(button && typeof window.showSectionInfoTooltip === "function") {
+      window.showSectionInfoTooltip(msg, button);
+      return;
+    }
     if(typeof toast === "function") toast(msg);
     else alert(msg);
   }
@@ -2150,4 +2789,96 @@ window.applyOrderLockV30=applyOrderLockV30;
   document.querySelector('.tabs')?.addEventListener('click', () => setTimeout(schedule, 0));
   window.addEventListener('resize', schedule);
   window.addEventListener('orientationchange', () => setTimeout(schedule, 200));
+})();
+
+
+/* v47 SPA router bootstrap: route changes now activate the existing stable views. */
+(function initSpaRouter(){
+  if(!window.AppRouter) return;
+  window.AppRouter.setHandler((view)=>switchView(view,{fromRouter:true}));
+  window.AppRouter.start("lookup");
+  window.addEventListener("app:viewchange", () => {
+    const lookupHeader = document.getElementById("lookupFixedHeader");
+    const active = document.querySelector(".view.active");
+    if (lookupHeader) lookupHeader.hidden = !(active && active.id === "lookupView");
+  });
+})();
+
+/* v51.1 order-session consistency and history details */
+(function(){
+ function ready(fn){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",fn,{once:true}):fn()}
+ ready(()=>{
+   const unlock=document.getElementById("unlockOrderBtn");
+   if(unlock){unlock.textContent="Adjust Order";unlock.title="Unlock today's placed Back Stock and Final Order for correction";}
+   if(window.renderOrderHistory) window.renderOrderHistory();
+ });
+})();
+
+(function(){
+  function updateConnectionStatus(){
+    const el=document.getElementById("headerOnlineStatus");
+    if(!el)return;
+    const online=navigator.onLine;
+    el.classList.toggle("is-offline",!online);
+    const text=el.querySelector(".header-status-text");
+    if(text)text.textContent=online?"Online":"Offline";
+  }
+  window.addEventListener("online",updateConnectionStatus);
+  window.addEventListener("offline",updateConnectionStatus);
+  document.readyState==="loading"?document.addEventListener("DOMContentLoaded",updateConnectionStatus,{once:true}):updateConnectionStatus();
+})();
+
+
+/* v52.3.0 unified Today's Order workflow */
+(function(){
+  function ready(fn){document.readyState==='loading'?document.addEventListener('DOMContentLoaded',fn,{once:true}):fn()}
+  function backList(){try{return typeof order==='function' ? (order()||[]) : []}catch{return []}}
+  function finalListV523(){try{return getJSON(key('front_stock'),[])||[]}catch{return []}}
+  function st(){try{return currentOrderStatus()}catch{return 'Draft'}}
+  function fmtDate(){try{return new Date(businessDate()+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}catch{return 'Today'}}
+  function renderFlow(el){
+    if(!el) return;
+    const mode=el.dataset.orderFlow||'back';
+    const back=backList(), fin=finalListV523(), status=st();
+    const placed=status==='Placed';
+    const hasBack=back.length>0, hasFinal=fin.length>0;
+    let current= mode==='back' ? 1 : 2;
+    if(placed) current=3;
+    let guidance='';
+    if(placed) guidance='Today’s order is placed and locked. Use Adjust Order only when a correction is required.';
+    else if(mode==='back') guidance=hasBack ? 'Back Stock is being recorded. When your count is ready, continue to Final Order and use these quantities while deciding what to order.' : 'Start by recording what you currently have in back stock. You can leave and resume this list during your shift.';
+    else guidance=hasFinal ? 'Review Back Stock beside each item, finish your order quantities, then place the order when you are ready.' : 'Your Back Stock is ready as a reference. Search or scan the products you need and enter the quantity to order.';
+    const statusLabel=placed?'Placed':(hasFinal?'Final Order in progress':(hasBack?'Back Stock in progress':'Draft'));
+    const cls=placed?'is-placed':(status==='Draft'&&placed?'is-adjusting':'');
+    el.innerHTML=`
+      <div class="today-order-flow-head"><div class="today-order-flow-title"><small>Today’s Order</small><strong>${fmtDate()}</strong></div><span class="today-order-status ${cls}">${statusLabel}</span></div>
+      <div class="today-order-progress">
+        <div class="today-order-step ${current>1||placed?'is-done':current===1?'is-active':''}"><span class="today-order-step-dot">${current>1||placed?'✓':'1'}</span><small>Back Stock</small></div>
+        <span class="today-order-line ${current>1||placed?'is-done':''}"></span>
+        <div class="today-order-step ${placed?'is-done':current===2?'is-active':''}"><span class="today-order-step-dot">${placed?'✓':'2'}</span><small>Final Order</small></div>
+        <span class="today-order-line ${placed?'is-done':''}"></span>
+        <div class="today-order-step ${placed?'is-done is-active':''}"><span class="today-order-step-dot">${placed?'✓':'3'}</span><small>Placed</small></div>
+      </div>
+      <div class="today-order-flow-body">
+        <div class="today-order-summary"><span>Back Stock</span><b>${back.length}</b></div>
+        <div class="today-order-summary"><span>Order Items</span><b>${fin.length}</b></div>
+        <div class="today-order-guidance">${guidance}</div>
+        <div class="today-order-flow-actions"></div>
+      </div>`;
+    const actions=el.querySelector('.today-order-flow-actions');
+    if(placed){
+      const b=document.createElement('button'); b.type='button'; b.className='secondary'; b.textContent='Adjust Order';
+      b.onclick=()=>document.getElementById('unlockOrderBtn')?.click(); actions.appendChild(b);
+      return;
+    }
+    if(mode==='back'){
+      const b=document.createElement('button'); b.type='button'; b.className='primary'; b.textContent=hasBack?'Continue to Final Order':'Open Final Order';
+      b.onclick=()=>document.getElementById('startFrontStockBtn')?.click(); actions.appendChild(b);
+    }else{
+      const backBtn=document.createElement('button'); backBtn.type='button'; backBtn.className='secondary'; backBtn.textContent='← Back Stock'; backBtn.onclick=()=>document.getElementById('backToBackStockBtn')?.click(); actions.appendChild(backBtn);
+      const p=document.createElement('button'); p.type='button'; p.className='primary'; p.textContent='Place Order'; p.disabled=!hasFinal; p.onclick=()=>document.getElementById('finalPlaceOrderBtn')?.click(); actions.appendChild(p);
+    }
+  }
+  function refresh(){document.querySelectorAll('.today-order-flow').forEach(renderFlow)}
+  ready(()=>{refresh();setTimeout(refresh,300);setTimeout(refresh,1000);document.addEventListener('click',()=>setTimeout(refresh,120),true);document.addEventListener('input',()=>setTimeout(refresh,80),true);window.refreshTodayOrderFlow=refresh});
 })();

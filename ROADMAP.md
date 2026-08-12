@@ -1,6 +1,8 @@
 # My Produce Assistant Roadmap
 
-## Current Sprint — Barcode UX Pack
+## Current Sprint
+
+- [x] Order History tabs/search/pagination — Barcode UX Pack
 
 - [x] Barcode Renderer v2 — shared, consistent scanner-safe presentation
 - [x] Large Barcode Viewer — tap barcode to open focus mode
@@ -29,3 +31,14 @@
 ## Development Rule
 
 Discuss → freeze scope → implement → local test → live smoke test → mark stable → next task.
+
+- [x] v52.2 Lookup redesign
+
+## Completed — Product image library
+- [x] Canonical product `images[]` model
+- [x] Full-screen product image gallery
+- [x] Missing Item multi-image editor
+- [x] Primary thumbnail selection
+- [x] Preserve image arrays through Missing Item → Catalog
+
+- [x] Unified Today's Order workflow

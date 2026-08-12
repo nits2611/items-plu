@@ -12,7 +12,7 @@
     }
 
     isConfigured() {
-      return Boolean(this.apiUrl && /^https:\/\//i.test(this.apiUrl));
+      return /^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?|$)/i.test(this.apiUrl);
     }
 
     getCachedCatalog() {
@@ -25,9 +25,7 @@
       }
     }
 
-    getCachedVersion() {
-      return localStorage.getItem(this.storageVersionKey) || "";
-    }
+    getCachedVersion() { return localStorage.getItem(this.storageVersionKey) || ""; }
 
     saveCatalog(catalog, version) {
       localStorage.setItem(this.storageCatalogKey, JSON.stringify(catalog));
@@ -41,98 +39,144 @@
       localStorage.removeItem(this.storageUpdatedAtKey);
     }
 
-    requestJsonp(url) {
-      return new Promise((resolve, reject) => {
-        console.info("[Catalog sync] Starting JSONP request:", url);
-        const callbackName = `googleSheetsCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        const script = document.createElement("script");
-        let settled = false;
+    async requestJson(url) {
+      const controller = new AbortController();
+      const timeoutId = global.setTimeout(() => controller.abort(), this.timeoutMs);
 
-        const cleanup = () => {
-          global.clearTimeout(timeoutId);
-          script.remove();
-          try { delete global[callbackName]; } catch (_) { global[callbackName] = undefined; }
-        };
+      try {
+        const response = await fetch(url, {
+          method: "GET",
+          redirect: "follow",
+          cache: "no-store",
+          credentials: "omit",
+          headers: {
+            Accept: "application/json, text/plain, */*"
+          },
+          signal: controller.signal
+        });
 
-        const finish = (handler, value) => {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          handler(value);
-        };
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(`Google catalog request failed with HTTP ${response.status}.`);
+        }
 
-        const timeoutId = global.setTimeout(() => {
-          finish(reject, new Error("Google Sheets request timed out."));
-        }, this.timeoutMs);
-
-        global[callbackName] = result => {
-          console.info("[Catalog sync] JSONP callback received.", {
-            success: result?.success,
-            updated: result?.updated,
-            catalogVersion: result?.catalogVersion,
-            productCount: result?.data?.products?.length
-          });
-          finish(resolve, result);
-        };
-        script.onerror = event => {
-          console.error("[Catalog sync] JSONP script failed to load.", event);
-          finish(reject, new Error("Unable to load Google Sheets data."));
-        };
-
-        const requestUrl = new URL(url);
-        requestUrl.searchParams.set("callback", callbackName);
-        requestUrl.searchParams.set("_", String(Date.now()));
-        script.src = requestUrl.toString();
-        script.async = true;
-        document.head.appendChild(script);
-      });
+        try {
+          return JSON.parse(text);
+        } catch (error) {
+          const preview = String(text || "").replace(/\s+/g, " ").slice(0, 180);
+          throw new Error(`Google catalog returned invalid JSON${preview ? `: ${preview}` : "."}`);
+        }
+      } catch (error) {
+        if (error?.name === "AbortError") {
+          throw new Error("Google catalog request timed out.");
+        }
+        throw error;
+      } finally {
+        global.clearTimeout(timeoutId);
+      }
     }
 
-    async sync() {
+    normalizeCatalog(data) {
+      const source = data && typeof data === "object" ? data : {};
+      return {
+        products: source.products,
+        productCodes: source.productCodes ?? source.product_codes,
+        productAliases: source.productAliases ?? source.product_aliases,
+        productImages: source.productImages ?? source.product_images ?? [],
+        categories: source.categories,
+        storeProducts: source.storeProducts ?? source.store_products,
+        appSettings: source.appSettings ?? source.app_settings ?? []
+      };
+    }
+
+    unwrapCatalogPayload(result) {
+      if (!result || typeof result !== "object") return null;
+
+      const candidates = [
+        result.data,
+        result.catalog,
+        result.payload,
+        result.result?.data,
+        result.result?.catalog,
+        result.result,
+        result
+      ];
+
+      return candidates.find(candidate => {
+        if (!candidate || typeof candidate !== "object") return false;
+        const catalog = this.normalizeCatalog(candidate);
+        return Array.isArray(catalog.products) ||
+          Array.isArray(catalog.productCodes) ||
+          Array.isArray(catalog.productAliases) ||
+          Array.isArray(catalog.categories) ||
+          Array.isArray(catalog.storeProducts);
+      }) || null;
+    }
+
+    getResponseVersion(result, catalogPayload) {
+      const directVersion = result?.version ?? result?.catalogVersion ??
+        result?.data?.version ?? result?.data?.catalogVersion ??
+        result?.result?.version ?? result?.result?.catalogVersion;
+
+      if (String(directVersion ?? "").trim()) {
+        return String(directVersion).trim();
+      }
+
+      const settings = this.normalizeCatalog(catalogPayload).appSettings;
+      if (Array.isArray(settings)) {
+        const row = settings.find(item => {
+          const key = item?.key ?? item?.setting_key ?? item?.setting_name ?? "";
+          return String(key).trim().toLowerCase() === "catalog_version";
+        });
+        const settingVersion = row?.value ?? row?.setting_value ?? "";
+        if (String(settingVersion).trim()) return String(settingVersion).trim();
+      }
+
+      return "";
+    }
+
+    async downloadCatalog({ force = true } = {}) {
       if (!this.isConfigured()) {
-        throw new Error("Google Apps Script URL is not configured in js/AppConfig.js.");
+        throw new Error("Set the deployed Google Apps Script /exec URL in src/core/config/AppConfig.js.");
       }
 
       const url = new URL(this.apiUrl);
-      const version = this.getCachedVersion();
-      if (version) url.searchParams.set("version", version);
-      if (this.storeId) url.searchParams.set("storeId", this.storeId);
+      url.searchParams.set("action", "products");
+      if (this.storeId) {
+        url.searchParams.set("store_id", this.storeId);
+        url.searchParams.set("storeId", this.storeId);
+      }
+      if (force) url.searchParams.set("force", "1");
 
-      let result = await this.requestJsonp(url.toString());
+      const result = await this.requestJson(url.toString());
+      const explicitFailure = result?.success === false ||
+        result?.success === "false" ||
+        result?.ok === false ||
+        String(result?.status || "").toLowerCase() === "error";
 
-      // If a version remains in storage but the catalog payload was removed,
-      // the server may correctly answer "updated: false" while the app has
-      // nothing usable to display. Retry once without a version in that case.
-      if (result?.updated === false && !this.getCachedCatalog()) {
-        console.warn("[Catalog sync] Version exists without catalog cache; forcing a full download.");
-        const retryUrl = new URL(this.apiUrl);
-        if (this.storeId) retryUrl.searchParams.set("storeId", this.storeId);
-        retryUrl.searchParams.set("force", "1");
-        result = await this.requestJsonp(retryUrl.toString());
+      if (explicitFailure) {
+        throw new Error(result?.message || result?.error || "Google catalog request failed.");
       }
 
-      if (!result || result.success !== true) {
-        throw new Error(result?.message || "Google catalog returned an invalid response.");
+      const catalogPayload = this.unwrapCatalogPayload(result);
+      if (!catalogPayload) {
+        throw new Error("Google catalog returned JSON, but no recognizable product catalog was found in the response.");
       }
 
-      const catalogVersion = String(result.catalogVersion ?? "");
-      if (result.updated === false) {
-        return { changed: false, version: catalogVersion, catalog: null };
-      }
+      const catalog = this.normalizeCatalog(catalogPayload);
+      const version = this.getResponseVersion(result, catalogPayload);
+      if (!version) throw new Error("Google catalog response is missing its version.");
 
-      if (!result.data || !Array.isArray(result.data.products)) {
-        throw new Error("Google catalog response is missing required data.");
-      }
+      const required = ["products", "productCodes", "productAliases", "categories", "storeProducts"];
+      const missing = required.filter(key => !Array.isArray(catalog[key]));
+      if (missing.length) throw new Error(`Google catalog response is missing: ${missing.join(", ")}.`);
 
-      this.saveCatalog(result.data, catalogVersion);
-      console.info("[Catalog sync] Catalog cache updated.", {
-        catalogVersion,
-        products: result.data.products.length,
-        productCodes: result.data.productCodes?.length || 0,
-        productAliases: result.data.productAliases?.length || 0
-      });
-      return { changed: true, version: catalogVersion, catalog: result.data };
+      return { changed: true, version, catalog };
     }
+
+    // Compatibility alias for older code. v50 uses downloadCatalog only when
+    // the user clicks Update Catalog.
+    sync() { return this.downloadCatalog({ force: true }); }
   }
 
   global.GoogleSheetsCatalogProvider = GoogleSheetsCatalogProvider;

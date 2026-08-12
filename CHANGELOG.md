@@ -1,4 +1,124 @@
-## v52.0.5 - Mobile header alignment fix
+## v52.3.2 - Order History tabs, search and pagination
+
+- Replaced stacked Back Stock + Final Order history details with tabs inside each expanded date.
+- Final Order is the default history tab.
+- Added per-tab search by item name, PLU/code or quantity.
+- Added 15-item pagination for long historical lists.
+- Search results paginate independently and reset to page 1 when the query changes.
+- Switching tabs clears stale search/page state.
+- Export CSV still exports the complete selected date, not only the visible page.
+- Preserved single-date accordion expansion and existing order/session behavior.
+
+## v52.3.1 - Order lock + history accordion polish
+
+- Disabled Lookup Back Stock `-`, quantity input, and `+` controls while today's order is Placed.
+- Lookup now shows `Locked` instead of misleading `Saved` feedback while the daily order is locked.
+- Adjust Order immediately restores Lookup quantity editing.
+- Reworked Order History into a true full-width vertical accordion so expanded details use the complete available width.
+- On mobile, history summaries become compact headers and item details use readable stacked rows.
+- Only one order-history date can be expanded at a time.
+- Preserved the existing order-session, export, placement, adjustment, barcode, gallery, and catalog logic.
+
+## v52.3.0 - Unified Today's Order workflow
+
+- Added a shared Today's Order workflow panel to Back Stock and Final Order.
+- Shows business date, Draft/in-progress/Placed status, Back Stock and Final Order item counts, and a clear 3-step progression.
+- Added contextual guidance and direct Continue / Back / Place / Adjust actions while reusing existing order logic.
+- No order storage or business-rule changes.
+
+## v52.2.6
+- Polished the Missing Item modal on desktop without changing mobile behavior or form logic.
+- Centers the dialog within the actual desktop workspace below the fixed header/tab strip and beside the persistent sidebar.
+- Added a professional modal surface, sticky header/actions, refined form spacing, focus states, and short-height handling.
+- Preserved the desktop sidebar scrolling fix and all existing gallery/catalog behavior.
+
+## v52.2.5
+- Fixed Missing Item modal layering and responsive usable-viewport spacing so the fixed header/bottom navigation no longer covers the editor.
+- Preserved the v52.2.4 desktop sidebar scrollbar fix.
+
+# v52.2.2 — Missing item multi-image editor
+
+- Replaced the single Missing Item image URL field with a repeatable image-list editor.
+- Users can add multiple image URLs or local image paths, preview them, remove them, and choose which image is primary.
+- The first image is automatically used as the product thumbnail and remains compatible with the existing image gallery.
+- Missing Items persist the canonical `images` array through local storage, CSV export/import, and Add to Catalog.
+- Legacy `image_url` and `image_local` values are still maintained automatically for backward compatibility.
+- Added a reusable `ImageListEditor` component so the same interaction can later be reused by Product Management.
+
+# v52.2.1 — Product image gallery + image array model
+
+- Added a reusable `ImageLibrary` that stores product images as an `images` array while remaining backward compatible with `image_url` and `image_local`.
+- Google Sheets/CSV can now use an `images` column containing a JSON array, for example `["https://.../front.jpg","https://.../side.jpg"]`.
+- Product thumbnails now open a full-screen responsive gallery.
+- Gallery supports previous/next controls, position dots, keyboard arrows, Escape to close, backdrop close, and mobile swipe navigation.
+- Lookup, regular product cards, Dashboard recent products, and Archive reuse the same image normalization logic.
+- CSV exports now include the canonical `images` field.
+- Existing single-image records continue to work and are automatically represented as a one-item image array locally.
+- No catalog schema migration is required for IndexedDB; product objects now persist `images` arrays naturally.
+
+# v52.2.0 — Lookup redesign
+
+- Redesigned Lookup product cards for faster scanning and a more professional operational layout.
+- Added clear product hierarchy for image, name, metadata, PLU/code, barcode, and Back Stock quantity.
+- Added thumb-friendly minus/plus quantity controls while preserving the existing order persistence logic.
+- Refined Lookup search, result count, filters, favorites, and compact product actions.
+- Kept Favorites and Recent on their existing card design so this release stays scoped to Lookup.
+- Preserved the manually verified mobile Lookup drawer clearance (`bottom: 71px`).
+
+# v52.1.8 — Barcode Long-Press Options
+
+- Added long press / right-click barcode options.
+- Added Show Large Barcode and Copy Product Code actions.
+- Product Details is reserved as Coming Soon.
+- Added smooth open/close transitions for the large barcode viewer.
+- Long press cancels when the user scrolls or moves the pointer.
+- Normal tap remains dedicated to the large barcode viewer.
+
+# v52.1.7 — Large Barcode Viewer
+
+- Added full-screen barcode focus mode on a single tap.
+- Uses a darkened backdrop and bright white barcode panel to reduce visual distraction for external price-gun scanning.
+- Reuses the shared Barcode Renderer v2 with larger scanner-safe dimensions.
+- Tap outside, use the Close button, or press Escape to exit.
+- Barcode elements are keyboard-focusable and can open with Enter/Space.
+- No long-press menu, swipe navigation, auto-close, or Lookup redesign in this release.
+
+# v52.1.6 — Barcode Renderer v2
+
+- Added one shared Code 128 renderer under `src/core/barcode/BarcodeRenderer.js`.
+- Standardized barcode display width and height across product and order cards.
+- Preserved Code 128 bar/module ratios while scaling the complete symbol consistently.
+- Kept human-readable code text separate from the SVG so text is not distorted.
+- Preserved the manually verified mobile Lookup drawer clearance (`bottom: 71px`).
+- No barcode viewer, long-press menu, or Lookup redesign is included in this step.
+
+# v52.1.3 — Final Order quick placement + Lookup drawer clearance
+
+- Added a direct **Place Order** button to the Final Order screen.
+- Reused the existing placement/session logic; no duplicate order logic was introduced.
+- The button is disabled when Final Order is empty or the current session is already placed.
+- Added extra mobile clearance above the fixed bottom navigation so the Lookup search drawer is fully visible.
+
+## v52.1.2 - Dashboard placed-button compatibility fix
+- Fixed a runtime error caused by legacy dashboard code expecting nested `<small>` and `.dash-circle` elements that no longer exist in the v52 dashboard button.
+- The placed-order status updater now supports both the old and current dashboard button markup safely.
+- Updated app/service-worker version metadata for this patch.
+
+## v52.1.1 - Local file protocol guard
+
+- Skip Service Worker registration and app-version fetch checks when opened via `file://`.
+- Prevent `origin null` Service Worker errors from interrupting local testing.
+- Keep the normal Service Worker/update workflow unchanged on localhost and HTTPS/GitHub Pages.
+
+## v52.1 - Dashboard redesign
+
+- Rebuilt Home/Dashboard as an operational command center.
+- Added today's order progress, counts, workflow state, and continuation actions.
+- Added daily quick access, contextual attention items, recent products, and recent order history.
+- Reused existing order, missing-item, recent-product, catalog-update, and routing logic without changing business rules.
+- No changes to scanner, catalog storage, order sessions, or import behavior.
+
+## v52.1 - Mobile header alignment fix
 
 - Fixed the remaining 10px gap between the top navbar and regular page headers on mobile.
 - Preserved the full-width mobile header treatment from v52.0.4.
@@ -301,3 +421,18 @@ No intended changes:
 - The service worker now waits for user confirmation before activating a new release.
 - JavaScript, CSS, and HTML are revalidated so users do not need a manual hard refresh.
 - Product catalog versioning remains independent from frontend application versioning.
+
+
+## v52.1.4 - Mobile bottom-safe layout
+- Centralized mobile bottom-navigation clearance with `--ui-bottom-safe-gap`.
+- Lookup's fixed search drawer now sits fully above the bottom navigation and respects device safe-area insets.
+- Normal mobile page content reserves the same bottom-safe area consistently.
+- Floating search and toast positions now use the same shared clearance rather than unrelated magic numbers.
+- Final Order quick Place Order behavior from v52.1.3 is preserved.
+
+## v52.2.5 - Missing Item Modal + Desktop Sidebar Fix
+- Positioned the Missing Item editor inside the usable viewport so the fixed header, desktop tabs, and mobile bottom navigation no longer cover it.
+- Kept the modal responsive across phone, tablet, short-height, and desktop layouts.
+- Restored independent vertical scrolling to the persistent desktop left navigation when its options exceed the viewport height.
+- Kept the desktop drawer footer visible while the navigation list scrolls.
+- No Missing Item data, gallery, catalog, order, scanner, or storage behavior was changed.

@@ -1,9 +1,49 @@
-const CACHE="my-produce-assistant-v45-jsonp-diagnostic";
-const SHELL=["./","./index.html","./styles.css","./app.js","./data.js","./js/AppConfig.js","./js/providers/LocalCatalogProvider.js","./js/providers/GoogleSheetsCatalogProvider.js","./js/services/CatalogService.js","./manifest.webmanifest","./items.csv","./icons/icon-192.png","./icons/icon-512.png"];
+const CACHE="my-produce-assistant-v52.3.2-history-tabs-search-pagination";
+const SHELL=[
+  "./",
+  "./index.html",
+  "./styles.css",
+  "./app.js",
+  "./data.js",
+  "./src/app.js",
+  "./src/core/config/AppConfig.js",
+  "./src/core/http/HttpClient.js",
+  "./src/core/storage/LocalStorageClient.js",
+  "./src/core/storage/IndexedDbClient.js",
+  "./src/core/router/Router.js",
+  "./src/core/utils/UrlUtils.js",
+  "./src/core/logging/Logger.js",
+  "./src/core/update/AppUpdateManager.js",
+  "./data/versions.json",
+  "./js/AppConfig.js",
+  "./js/providers/LocalCatalogProvider.js",
+  "./js/providers/GoogleSheetsCatalogProvider.js",
+  "./js/services/CatalogService.js",
+  "./src/modules/products/providers/LegacyCatalogProductProvider.js",
+  "./src/modules/products/providers/StaticCatalogVersionProvider.js",
+  "./src/modules/products/providers/IndexedDbProductProvider.js",
+  "./src/modules/products/ProductRepository.js",
+  "./src/modules/products/ProductService.js",
+  "./src/modules/products/ProductView.js",
+  "./src/modules/products/ProductController.js",
+  "./src/modules/orders/LocalOrderSessionStore.js",
+  "./src/core/barcode/BarcodeRenderer.js",
+  "./src/core/barcode/BarcodeViewer.js",
+  "./src/core/media/ImageLibrary.js",
+  "./src/core/media/ImageListEditor.js",
+  "./src/core/media/ImageGallery.js",
+  "./manifest.webmanifest",
+  "./items.csv",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png"
+];
 
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));
-  self.skipWaiting();
+});
+
+self.addEventListener("message",event=>{
+  if(event.data?.type==="SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate",event=>{
@@ -13,12 +53,9 @@ self.addEventListener("activate",event=>{
 
 self.addEventListener("fetch",event=>{
   const url=new URL(event.request.url);
-
-  // Do not intercept Google Apps Script / JSONP or any other cross-origin
-  // request. Let the browser handle redirects and script execution directly.
   if(url.origin!==self.location.origin) return;
 
-  if(url.pathname.endsWith("/items.csv")){
+  if(url.pathname.endsWith("/items.csv")||url.pathname.endsWith("/data/versions.json")){
     event.respondWith(
       fetch(event.request,{cache:"no-cache"})
         .then(response=>{
@@ -31,9 +68,9 @@ self.addEventListener("fetch",event=>{
     return;
   }
 
-  // Always revalidate code/config files so GitHub Pages does not keep an old
-  // provider or endpoint configuration after deployment.
-  if(/\.(?:js|html)$/.test(url.pathname)||url.pathname.endsWith("/")){
+  // Revalidate application assets so a released app version can be installed
+  // without requiring a manual hard refresh.
+  if(/\.(?:js|css|html)$/.test(url.pathname)||url.pathname.endsWith("/")){
     event.respondWith(
       fetch(event.request,{cache:"no-cache"})
         .then(response=>{
