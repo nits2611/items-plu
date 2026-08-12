@@ -7,7 +7,7 @@
   global.AppConfig = Object.freeze({
     app: Object.freeze({
       name: "My Produce Assistant",
-      version: "52.2.6"
+      version: "52.4.1"
     }),
 
     urls: Object.freeze({

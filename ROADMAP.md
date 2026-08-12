@@ -42,3 +42,5 @@ Discuss → freeze scope → implement → local test → live smoke test → ma
 - [x] Preserve image arrays through Missing Item → Catalog
 
 - [x] Unified Today's Order workflow
+
+- [x] Order architecture cleanup (Controller → Service → Repository → Provider)

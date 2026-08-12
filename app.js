@@ -68,12 +68,23 @@ async function checkForCSVUpdate(){return productController.checkForUpdate()}
 function getJSON(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}}function setJSON(k,v){localStorage.setItem(k,JSON.stringify(v))}
 const orderSessionStore=new LocalOrderSessionStore({namespace:`plu_${STORE}`,storeId:window.AppConfig?.catalog?.storeId||"STR00000001"});
 orderSessionStore.migrateLegacy();
-const key=n=>orderSessionStore.key(n);
-const businessDate=()=>orderSessionStore.getBusinessDate();
-const currentOrderStatus=()=>orderSessionStore.getStatus();
-const setCurrentOrderStatus=status=>orderSessionStore.setStatus(status);
-window.OrderSessionModule=Object.freeze({storage:orderSessionStore,getBusinessDate:businessDate,getStatus:currentOrderStatus,setStatus:setCurrentOrderStatus});
-const favs=()=>getJSON(key("favorites"),[]);const recents=()=>getJSON(key("recent"),[]);const order=()=>getJSON(key("order"),[]);
+const localOrderProvider=new LocalOrderProvider({sessionStore:orderSessionStore});
+const orderRepository=new OrderRepository(localOrderProvider);
+const orderService=new OrderService(orderRepository);
+const orderController=new OrderController(orderService);
+const key=n=>orderController.key(n);
+const businessDate=()=>orderController.getBusinessDate();
+const currentOrderStatus=()=>orderController.getStatus();
+const setCurrentOrderStatus=status=>orderController.setStatus(status);
+const getBackStockList=()=>orderController.getBackStock();
+const setBackStockList=list=>orderController.setBackStock(list);
+const getFinalOrderList=()=>orderController.getFinalOrder();
+const setFinalOrderList=list=>orderController.setFinalOrder(list);
+const getOrderHistoryList=()=>orderController.getHistory();
+const setOrderHistoryList=list=>orderController.setHistory(list);
+window.OrderSessionModule=Object.freeze({storage:orderSessionStore,provider:localOrderProvider,repository:orderRepository,service:orderService,controller:orderController,getBusinessDate:businessDate,getStatus:currentOrderStatus,setStatus:setCurrentOrderStatus});
+window.OrderModule=Object.freeze({provider:localOrderProvider,repository:orderRepository,service:orderService,controller:orderController});
+const favs=()=>getJSON(key("favorites"),[]);const recents=()=>getJSON(key("recent"),[]);const order=()=>getBackStockList();
 function isFav(code){return favs().includes(code)}function touch(code){let r=recents().filter(x=>x!==code);r.unshift(code);setJSON(key("recent"),r.slice(0,30))}
 function toggleFav(code){let f=favs();f=f.includes(code)?f.filter(x=>x!==code):[code,...f];setJSON(key("favorites"),f);renderAll()}
 function isCurrentOrderPlaced() {
@@ -81,7 +92,7 @@ function isCurrentOrderPlaced() {
 }
 
 function syncFinalOrderBackStock(code, qty) {
-  const list = getJSON(key("front_stock"), []);
+  const list = getFinalOrderList();
   let changed = false;
   const updated = list.map(row => {
     if (String(row.code) !== String(code)) return row;
@@ -92,7 +103,7 @@ function syncFinalOrderBackStock(code, qty) {
   });
 
   if (changed) {
-    setJSON(key("front_stock"), updated);
+    setFinalOrderList(updated);
   }
 
   if (typeof window.renderFrontStock === "function") window.renderFrontStock();
@@ -110,7 +121,7 @@ function addOrder(item, qty, silent = false) {
   if (!qty || Number(qty) <= 0) {
     const before = order();
     const after = before.filter(x => String(x.code) !== String(item.code));
-    setJSON(key("order"), after);
+    setBackStockList(after);
     syncFinalOrderBackStock(item.code, "");
     touch(item.code);
     renderOrder();
@@ -130,7 +141,7 @@ function addOrder(item, qty, silent = false) {
     item_name: item.item_name,
     addedAt: new Date().toISOString()
   });
-  setJSON(key("order"), current);
+  setBackStockList(current);
   syncFinalOrderBackStock(item.code, qty);
   touch(item.code);
   renderOrder();
@@ -622,8 +633,8 @@ document.getElementById("updateCatalogBtn")?.addEventListener("click",async()=>{
   if(!confirm("Download and install the available product catalog update on this device? Your existing local catalog will be preserved if the update fails."))return;
   try{await productController.applyAvailableUpdate()}catch(_){/* UI already reports the error. */}
 });
-document.getElementById("resetBtn").onclick=async()=>{await productController.reset();await checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear back stock?")){setJSON(key("order"),[]);renderOrder()}};
-document.getElementById("exportOrderBtn").onclick=()=>downloadCSV("back-stock.csv",["item_name,code,quantity",...order().map(o=>`"${(o.item_name||"").replaceAll('"','""')}",${o.code},"${String(o.qty).replaceAll('"','""')}"`)].join("\n"));document.getElementById("exportProfileBtn").onclick=()=>{const data={favorites:favs(),recent:recents(),order:order(),exportedAt:new Date().toISOString()};downloadFile("plu-profile.json",JSON.stringify(data,null,2),"application/json")};document.getElementById("importProfile")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(data.favorites)setJSON(key("favorites"),data.favorites);if(data.recent)setJSON(key("recent"),data.recent);if(data.order)setJSON(key("order"),data.order);renderAll()});
+document.getElementById("resetBtn").onclick=async()=>{await productController.reset();await checkForCSVUpdate()};document.getElementById("clearRecentBtn").onclick=()=>{setJSON(key("recent"),[]);renderRecent()};document.getElementById("clearOrderBtn").onclick=()=>{if(confirm("Clear back stock?")){setBackStockList([]);renderOrder()}};
+document.getElementById("exportOrderBtn").onclick=()=>downloadCSV("back-stock.csv",["item_name,code,quantity",...order().map(o=>`"${(o.item_name||"").replaceAll('"','""')}",${o.code},"${String(o.qty).replaceAll('"','""')}"`)].join("\n"));document.getElementById("exportProfileBtn").onclick=()=>{const data={favorites:favs(),recent:recents(),order:order(),exportedAt:new Date().toISOString()};downloadFile("plu-profile.json",JSON.stringify(data,null,2),"application/json")};document.getElementById("importProfile")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(data.favorites)setJSON(key("favorites"),data.favorites);if(data.recent)setJSON(key("recent"),data.recent);if(data.order)setBackStockList(data.order);renderAll()});
 function downloadCSV(n,t){downloadFile(n,t,"text/csv")}function downloadFile(n,t,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type}));a.download=n;a.click();URL.revokeObjectURL(a.href)}
 function positionScannerDetection(code){
  const video=document.getElementById("scannerVideo"),box=document.getElementById("scannerDetectionBox");
@@ -1957,8 +1968,8 @@ renderAll();
 /* v26 Final Order v1 */
 (function(){
 function ready(fn){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",fn,{once:true}):fn()}
-function frontStock(){return getJSON(key("front_stock"),[])}
-function setFrontStock(v){setJSON(key("front_stock"),v)}
+function frontStock(){return getFinalOrderList()}
+function setFrontStock(v){setFinalOrderList(v)}
 function backQty(code){const f=order().find(x=>String(x.code)===String(code));return f?f.qty:""}
 function frontQty(code){const f=frontStock().find(x=>String(x.code)===String(code));return f?f.qty:""}
 function esc(v){return `"${String(v??"").replaceAll('"','""')}"`}
@@ -2056,7 +2067,7 @@ ready(function(){
 function ready(f){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",f,{once:true}):f()}
 function status(){return currentOrderStatus()}
 function setStatus(s){setCurrentOrderStatus(s);summary();lockState()}
-function finalList(){try{return getJSON(key("front_stock"),[])}catch{return[]}}
+function finalList(){try{return getFinalOrderList()}catch{return[]}}
 function openDrawer(){let d=document.getElementById("appDrawer"),b=document.getElementById("drawerBackdrop");if(!d)return;d.classList.add("open");d.setAttribute("aria-hidden","false");if(b)b.hidden=false;document.body.classList.add("drawer-open")}
 function closeDrawer(){let d=document.getElementById("appDrawer"),b=document.getElementById("drawerBackdrop");if(!d)return;d.classList.remove("open");d.setAttribute("aria-hidden","true");if(b)b.hidden=true;document.body.classList.remove("drawer-open")}
 function tools(){closeDrawer();let p=document.getElementById("topToolsPanel");if(p){p.hidden=false;p.style.display="flex";document.body.classList.add("tools-open")}}
@@ -2093,7 +2104,7 @@ function renderDashboardAttention(miss){
 }
 function renderDashboardRecentOrders(){
  const box=document.getElementById("dashRecentOrders"); if(!box)return;
- const history=getJSON(key("order_history"),[]).slice(0,4);
+ const history=getOrderHistoryList().slice(0,4);
  box.innerHTML="";
  if(!history.length){box.innerHTML='<div class="dashboard-empty-mini">No placed orders yet. Completed orders will appear here.</div>';return}
  history.forEach(h=>{
@@ -2160,9 +2171,9 @@ ready(function(){
 function ready(f){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",f,{once:true}):f()}
 function esc(v){return `"${String(v??"").replaceAll('"','""')}"`}
 function todayKey(){return businessDate()}
-function orderHistory(){return getJSON(key("order_history"),[])}
-function setOrderHistory(v){setJSON(key("order_history"),v)}
-function finalList(){try{return getJSON(key("front_stock"),[])}catch{return[]}}
+function orderHistory(){return getOrderHistoryList()}
+function setOrderHistory(v){setOrderHistoryList(v)}
+function finalList(){try{return getFinalOrderList()}catch{return[]}}
 function status(){return currentOrderStatus()}
 function setStatus(s){setCurrentOrderStatus(s); if(window.refreshWorkflowSummary) window.refreshWorkflowSummary(); renderOrderHistory(); applyLock(); if(typeof renderLookup==="function") renderLookup();}
 function applyLock(){document.body.classList.toggle("order-locked",status()==="Placed")}
@@ -2377,7 +2388,7 @@ ready(function(){
 function ready(f){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",f,{once:true}):f()}
 function status(){return currentOrderStatus()}
 function setStatus(s){setCurrentOrderStatus(s); if(window.refreshWorkflowSummary) window.refreshWorkflowSummary(); if(window.renderOrderHistory) window.renderOrderHistory(); if(typeof renderLookup==="function") renderLookup();}
-function finalList(){try{return getJSON(key("front_stock"),[])}catch{return[]}}
+function finalList(){try{return getFinalOrderList()}catch{return[]}}
 function snapshotOrderV29(){
  if(status()==="Placed"){toast("Order already placed");return}
  const back=(typeof order==="function"?order():[]);
@@ -2385,9 +2396,9 @@ function snapshotOrderV29(){
  if(!final.length){toast("Add at least one item to Final Order before placing the order");return;}
  if(!confirm("Mark today’s order as placed? This will save it by date and lock editing.")) return;
  const date=businessDate();
- const hist=getJSON(key("order_history"),[]).filter(x=>x.date!==date);
+ const hist=getOrderHistoryList().filter(x=>x.date!==date);
  hist.unshift({id:date+"-"+Date.now(),date,placedAt:new Date().toISOString(),status:"Placed",backStock:back,finalOrder:final});
- setJSON(key("order_history"),hist.slice(0,100));
+ setOrderHistoryList(hist.slice(0,100));
  setStatus("Placed");
  document.body.classList.add("order-locked");
  toast("Order placed and saved");
@@ -2833,7 +2844,7 @@ window.applyOrderLockV30=applyOrderLockV30;
 (function(){
   function ready(fn){document.readyState==='loading'?document.addEventListener('DOMContentLoaded',fn,{once:true}):fn()}
   function backList(){try{return typeof order==='function' ? (order()||[]) : []}catch{return []}}
-  function finalListV523(){try{return getJSON(key('front_stock'),[])||[]}catch{return []}}
+  function finalListV523(){try{return getFinalOrderList()||[]}catch{return []}}
   function st(){try{return currentOrderStatus()}catch{return 'Draft'}}
   function fmtDate(){try{return new Date(businessDate()+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}catch{return 'Today'}}
   function renderFlow(el){

@@ -1,4 +1,4 @@
-const CACHE="my-produce-assistant-v52.3.2-history-tabs-search-pagination";
+const CACHE="my-produce-assistant-v52.4.1-app-update-loop-fix";
 const SHELL=[
   "./",
   "./index.html",

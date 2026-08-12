@@ -1,3 +1,18 @@
+## v52.4.1 — App Update Loop Fix
+
+- Fixed the canonical `src/core/config/AppConfig.js` app version being left at `52.2.6` while `data/versions.json` advertised a newer release.
+- Aligned canonical config, compatibility config, version manifest, and service-worker cache at `52.4.1`.
+- Prevents the app from repeatedly announcing the same installed release as an available update.
+- Google Sheets `minimum_app_version` and `catalog_version` are not used for this normal app-update comparison and require no change for this fix.
+
+# v52.4.0 — Order Architecture Cleanup
+
+- Added `OrderController`, `OrderService`, `OrderRepository`, and `LocalOrderProvider`.
+- Routed Back Stock, Final Order, order status, and Order History persistence through the Order module boundary.
+- Kept the existing `LocalOrderSessionStore` and localStorage data format for this release so user-visible behavior and saved data remain compatible.
+- Exposed `window.OrderModule` for future provider swaps (IndexedDB/API) without rewriting views.
+- No intended UI or workflow changes.
+
 ## v52.3.2 - Order History tabs, search and pagination
 
 - Replaced stacked Back Stock + Final Order history details with tabs inside each expanded date.
