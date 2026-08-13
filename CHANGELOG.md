@@ -1,3 +1,11 @@
+# v52.4.3 - Mobile Drawer First-Paint Fix
+
+- Mobile sidebar is hidden off-canvas from the first browser paint instead of being hidden after application startup.
+- Drawer transitions are disabled during bootstrap, preventing the sidebar from visibly sliding away while the app loads.
+- Desktop persistent sidebar behavior is unchanged.
+- Sidebar version label now uses the runtime app version instead of a hardcoded value.
+- Uses the v52.4.2 atomic asset/version loading strategy.
+
 ## v52.4.1 — App Update Loop Fix
 
 - Fixed the canonical `src/core/config/AppConfig.js` app version being left at `52.2.6` while `data/versions.json` advertised a newer release.

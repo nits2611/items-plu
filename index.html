@@ -1,4 +1,23 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#087763"><title>My Produce Assistant</title><link rel="apple-touch-icon" href="icons/icon-192.png"><style>html.app-booting body{visibility:hidden}</style><script>document.documentElement.classList.add("app-booting");</script>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#087763"><title>My Produce Assistant</title><link rel="apple-touch-icon" href="icons/icon-192.png"><style>
+html.app-booting body{visibility:hidden}
+/* Critical first-paint drawer state. Keep the mobile sidebar off-canvas before
+   the versioned stylesheet and application JavaScript finish loading. */
+@media (max-width:899.98px){
+  #appDrawer:not(.open){
+    transform:translateX(-105%)!important;
+    visibility:hidden!important;
+    opacity:0!important;
+    pointer-events:none!important;
+  }
+  #appDrawer.open{
+    visibility:visible!important;
+    opacity:1!important;
+    pointer-events:auto!important;
+  }
+}
+/* Never animate the drawer from an unknown pre-boot state. */
+html:not(.app-ui-ready) #appDrawer{transition:none!important}
+</style><script>document.documentElement.classList.add("app-booting");</script>
 <style id="organic-inline-style">
 .organic-inline{
   display:flex;
@@ -561,6 +580,8 @@
     const version = await resolveVersion();
     window.__APP_VERSION__ = version;
     window.__assetVersion = version;
+    const drawerVersion = document.querySelector(".drawer-version");
+    if (drawerVersion) drawerVersion.textContent = `v${version}`;
     loadManifest(version);
     await loadStyles(version);
     reveal();
@@ -568,6 +589,7 @@
     for (const path of scripts) {
       await loadScript(path, version);
     }
+    document.documentElement.classList.add("app-ui-ready");
   }
 
   boot().catch((error) => {
