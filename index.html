@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#087763"><title>My Produce Assistant</title><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/icon-192.png"><link rel="stylesheet" href="styles.css">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#087763"><title>My Produce Assistant</title><link rel="apple-touch-icon" href="icons/icon-192.png"><style>html.app-booting body{visibility:hidden}</style><script>document.documentElement.classList.add("app-booting");</script>
 <style id="organic-inline-style">
 .organic-inline{
   display:flex;
@@ -453,4 +453,126 @@
   </div>
 </div>
 
-<footer>Local-first catalog with user-controlled remote updates.</footer><script src="data.js"></script><script src="src/core/config/AppConfig.js"></script><script src="src/core/logging/Logger.js"></script><script src="src/core/utils/UrlUtils.js"></script><script src="src/core/http/HttpClient.js"></script><script src="src/core/storage/LocalStorageClient.js"></script><script src="src/core/storage/IndexedDbClient.js"></script><script src="src/core/router/Router.js"></script><script src="src/core/update/AppUpdateManager.js"></script><script src="src/app.js"></script><script src="js/providers/LocalCatalogProvider.js"></script><script src="js/providers/GoogleSheetsCatalogProvider.js"></script><script src="js/services/CatalogService.js"></script><script src="src/modules/products/providers/LegacyCatalogProductProvider.js"></script><script src="src/modules/products/providers/StaticCatalogVersionProvider.js"></script><script src="src/modules/products/providers/IndexedDbProductProvider.js"></script><script src="src/modules/products/ProductRepository.js"></script><script src="src/modules/products/ProductService.js"></script><script src="src/modules/products/ProductView.js"></script><script src="src/modules/products/ProductController.js"></script><script src="src/modules/orders/LocalOrderSessionStore.js"></script><script src="src/modules/orders/providers/LocalOrderProvider.js"></script><script src="src/modules/orders/OrderRepository.js"></script><script src="src/modules/orders/OrderService.js"></script><script src="src/modules/orders/OrderController.js"></script><script src="src/core/barcode/BarcodeRenderer.js"></script><script src="src/core/barcode/BarcodeViewer.js"></script><script src="src/core/media/ImageLibrary.js"></script><script src="src/core/media/ImageListEditor.js"></script><script src="src/core/media/ImageGallery.js"></script><script src="app.js"></script></body></html>
+<footer>Local-first catalog with user-controlled remote updates.</footer>
+<script>
+(function(){
+  "use strict";
+
+  const VERSION_URL = "./data/versions.json";
+  const VERSION_KEY = "myProduceAssistant.lastAppVersion";
+  const scripts = [
+    "data.js",
+    "src/core/config/AppConfig.js",
+    "src/core/logging/Logger.js",
+    "src/core/utils/UrlUtils.js",
+    "src/core/http/HttpClient.js",
+    "src/core/storage/LocalStorageClient.js",
+    "src/core/storage/IndexedDbClient.js",
+    "src/core/router/Router.js",
+    "src/core/update/AppUpdateManager.js",
+    "src/app.js",
+    "js/providers/LocalCatalogProvider.js",
+    "js/providers/GoogleSheetsCatalogProvider.js",
+    "js/services/CatalogService.js",
+    "src/modules/products/providers/LegacyCatalogProductProvider.js",
+    "src/modules/products/providers/StaticCatalogVersionProvider.js",
+    "src/modules/products/providers/IndexedDbProductProvider.js",
+    "src/modules/products/ProductRepository.js",
+    "src/modules/products/ProductService.js",
+    "src/modules/products/ProductView.js",
+    "src/modules/products/ProductController.js",
+    "src/modules/orders/LocalOrderSessionStore.js",
+    "src/modules/orders/providers/LocalOrderProvider.js",
+    "src/modules/orders/OrderRepository.js",
+    "src/modules/orders/OrderService.js",
+    "src/modules/orders/OrderController.js",
+    "src/core/barcode/BarcodeRenderer.js",
+    "src/core/barcode/BarcodeViewer.js",
+    "src/core/media/ImageLibrary.js",
+    "src/core/media/ImageListEditor.js",
+    "src/core/media/ImageGallery.js",
+    "app.js"
+  ];
+
+  function versioned(path, version){
+    const separator = path.includes("?") ? "&" : "?";
+    return `${path}${separator}v=${encodeURIComponent(version)}`;
+  }
+
+  function reveal(){
+    document.documentElement.classList.remove("app-booting");
+  }
+
+  async function resolveVersion(){
+    let saved = "";
+    try { saved = localStorage.getItem(VERSION_KEY) || ""; } catch (_) {}
+
+    if (location.protocol !== "http:" && location.protocol !== "https:") {
+      return saved || "dev";
+    }
+
+    try {
+      const response = await fetch(`${VERSION_URL}?_=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" }
+      });
+      if (!response.ok) throw new Error(`Version manifest HTTP ${response.status}`);
+      const manifest = await response.json();
+      const remote = String(manifest?.app?.version || "").trim();
+      if (!remote) throw new Error("Version manifest has no app.version");
+      try { localStorage.setItem(VERSION_KEY, remote); } catch (_) {}
+      return remote;
+    } catch (error) {
+      console.warn("Unable to read release version; using last installed version.", error);
+      return saved || "dev";
+    }
+  }
+
+  function loadStyles(version){
+    return new Promise((resolve) => {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = versioned("styles.css", version);
+      link.onload = resolve;
+      link.onerror = resolve;
+      document.head.appendChild(link);
+    });
+  }
+
+  function loadManifest(version){
+    const link = document.createElement("link");
+    link.rel = "manifest";
+    link.href = versioned("manifest.webmanifest", version);
+    document.head.appendChild(link);
+  }
+
+  function loadScript(path, version){
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = versioned(path, version);
+      script.async = false;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error(`Unable to load ${path}`));
+      document.body.appendChild(script);
+    });
+  }
+
+  async function boot(){
+    const version = await resolveVersion();
+    window.__APP_VERSION__ = version;
+    window.__assetVersion = version;
+    loadManifest(version);
+    await loadStyles(version);
+    reveal();
+
+    for (const path of scripts) {
+      await loadScript(path, version);
+    }
+  }
+
+  boot().catch((error) => {
+    console.error("Application bootstrap failed.", error);
+    reveal();
+  });
+})();
+</script></body></html>

@@ -93,3 +93,7 @@ v52.2.1 introduces a canonical `images` array for products. CSV and Google Sheet
 
 ## Missing Item image editor (v52.2.2)
 Missing Items now use a repeatable image editor instead of a single image field. Add any number of image URLs or local paths, remove unwanted images, or mark an image as primary. The first image is the thumbnail. Internally, all images are saved in the canonical `images` array; `image_url` and `image_local` remain compatibility aliases.
+
+### Atomic app releases (v52.4.2+)
+The frontend app version now has one manual source of truth: `data/versions.json -> app.version`.
+At startup, `index.html` reads that version and loads CSS/JS as versioned URLs such as `styles.css?v=52.4.2`. `AppConfig` reads the same runtime value, and the Service Worker is registered as `service-worker.js?v=52.4.2` and pre-caches that exact asset set. This prevents a PWA from mixing new HTML with stale CSS or JavaScript.

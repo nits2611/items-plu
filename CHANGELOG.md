@@ -451,3 +451,12 @@ No intended changes:
 - Restored independent vertical scrolling to the persistent desktop left navigation when its options exceed the viewport height.
 - Kept the desktop drawer footer visible while the navigation list scrolls.
 - No Missing Item data, gallery, catalog, order, scanner, or storage behavior was changed.
+
+## v52.4.2 - Atomic PWA Release Assets
+- Centralized frontend release versioning on `data/versions.json -> app.version`.
+- Added bootstrap asset loader so CSS/JS URLs automatically receive `?v=<app version>`.
+- AppConfig now reads the runtime release version instead of duplicating a hard-coded version.
+- Service Worker is registered as `service-worker.js?v=<app version>` so a new release creates a new worker and cache namespace.
+- New Service Worker pre-caches the exact versioned CSS/JS set, removes old release caches on activation, and serves versioned assets cache-first safely.
+- Navigation and version-manifest requests use network-first/no-store behavior to avoid mixed-release HTML/CSS/JS.
+- Update flow now registers the remote-version Service Worker before activating the update.

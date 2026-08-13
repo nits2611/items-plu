@@ -7,7 +7,7 @@
 
   console.warn("Deprecated js/AppConfig.js loaded; update the page to use src/core/config/AppConfig.js.");
   global.AppConfig = Object.freeze({
-    app: Object.freeze({ name: "My Produce Assistant", version: "52.4.1" }),
+    app: Object.freeze({ name: "My Produce Assistant", version: String(global.__APP_VERSION__ || "dev") }),
     urls: Object.freeze({
       saveOnSearchBase: "https://www.saveonfoods.com/sm/planning/rsid/1982/results?q=",
       bundledCatalog: "./items.csv",
