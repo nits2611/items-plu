@@ -44,3 +44,17 @@ Discuss → freeze scope → implement → local test → live smoke test → ma
 - [x] Unified Today's Order workflow
 
 - [x] Order architecture cleanup (Controller → Service → Repository → Provider)
+
+
+## Current: Basic Shrink Count
+- [x] Step 1: dedicated route, navigation, and empty workspace
+- [ ] Step 2: product search by name / PLU
+- [ ] Step 3: today's shrink quantity save/edit/remove
+- [ ] Step 4: simple dated history
+- [ ] Step 5: contextual scanner integration
+
+Note: build each step from the stable baseline and verify Lookup/product loading before continuing.
+
+- [x] Shrink scanner uses existing contextual barcode scanner.
+
+- [x] Basic Shrink Count: quantity + measurement + today list + history

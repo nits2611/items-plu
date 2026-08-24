@@ -1,3 +1,31 @@
+
+## 52.4.7 — Shrink scanner
+- Added the existing contextual camera scanner to Shrink Count.
+- A scanned barcode stays on Shrink Count and fills the Shrink search box.
+- No shrink persistence, Product storage, Order storage, or IndexedDB changes.
+
+## v52.4.6 - Shrink Count Step 2 (product search + selection)
+
+- Added Shrink product search using the existing proven ProductService/catalog already loaded by Lookup.
+- Search supports item name, PLU/barcode, brand and the same searchable product metadata/aliases used by the product domain.
+- Added responsive product-result cards and an explicit Select action.
+- Selecting an item confirms the product for Shrink without saving any quantity yet; persistence remains deliberately out of scope until Step 3.
+- No Product IndexedDB, Order storage, scanner, catalog-sync, or startup-chain changes.
+
+## v52.4.5 - Shrink Count Step 1 (navigation + empty workspace)
+
+- Built directly on the recovered stable v52.4.4 baseline.
+- Added a dedicated Shrink Count route and Work-menu navigation entry.
+- Added only an empty Shrink workspace for this step; no shrink storage, scanner, or product-search code yet.
+- Product catalog/IndexedDB, Order storage, PWA release flow, and existing business logic are unchanged.
+- This incremental step is intentionally designed to verify that adding Shrink does not regress Lookup/product loading.
+
+
+## v52.4.4 - IndexedDB downgrade recovery
+- Raised the Product IndexedDB schema version to 2 so browsers previously upgraded by the discarded v52.5.x experiment can open the stable catalog cache again.
+- Product startup no longer fails if IndexedDB cache writes fail; the bundled/local catalog remains usable because IndexedDB is a cache, not the source of truth.
+- No Order IndexedDB migration or Shrink code is included. This release is based directly on stable v52.4.3.
+
 # v52.4.3 - Mobile Drawer First-Paint Fix
 
 - Mobile sidebar is hidden off-canvas from the first browser paint instead of being hidden after application startup.
@@ -468,3 +496,9 @@ No intended changes:
 - New Service Worker pre-caches the exact versioned CSS/JS set, removes old release caches on activation, and serves versioned assets cache-first safely.
 - Navigation and version-manifest requests use network-first/no-store behavior to avoid mixed-release HTML/CSS/JS.
 - Update flow now registers the remote-version Service Worker before activating the update.
+
+## v52.4.8
+- Added shrink quantity capture with measurement units.
+- Added edit/remove for today's shrink records.
+- Added simple dated shrink history.
+- Shrink data remains local-only and does not change Product IndexedDB.

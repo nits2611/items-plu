@@ -12,6 +12,7 @@
     frontStock: "/final-order",
     dashboard: "/dashboard",
     orders: "/orders",
+    shrink: "/shrink",
     inventory: "/inventory",
     dataTools: "/data-tools"
   });

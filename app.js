@@ -662,6 +662,16 @@ function handleScannerResult(value,context){
   setTimeout(()=>document.querySelector("#frontSearchResults .front-qty-input")?.focus(),80);
   return;
  }
+ if(context==="shrink"){
+  const input=document.getElementById("shrinkSearchInput");
+  if(input){
+   input.value=val;
+   switchView("shrink");
+   input.dispatchEvent(new Event("input",{bubbles:true}));
+   setTimeout(()=>input.focus(),80);
+  }
+  return;
+ }
  q.value=val;switchView("lookup");renderLookup();if(!getResults().length)renderNotFound(val);
 }
 async function startScanner(context="lookup"){
@@ -669,7 +679,7 @@ async function startScanner(context="lookup"){
  scannerContext=context||"lookup";scannerAccepting=false;
  const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),status=document.getElementById("scannerStatus"),box=document.getElementById("scannerDetectionBox");
  if(box){box.classList.remove("visible");box.removeAttribute("style")}
- modal.hidden=false;status.textContent=scannerContext==="finalOrder"?"Point camera at a barcode to add it to Final Order.":"Point camera at barcode.";
+ modal.hidden=false;status.textContent=scannerContext==="finalOrder"?"Point camera at a barcode to add it to Final Order.":scannerContext==="shrink"?"Point camera at a barcode to find the product for Shrink Count.":"Point camera at barcode.";
  try{
   scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}}});video.srcObject=scannerStream;await video.play();
   const detector=new BarcodeDetector({formats:["code_128","ean_13","upc_a","upc_e","ean_8"]});
@@ -677,7 +687,9 @@ async function startScanner(context="lookup"){
  }catch(e){status.textContent="Camera unavailable. Check permission/HTTPS."}
 }
 function stopScanner(){const modal=document.getElementById("scannerModal"),video=document.getElementById("scannerVideo"),box=document.getElementById("scannerDetectionBox");modal.hidden=true;if(scannerTimer)clearInterval(scannerTimer);scannerTimer=null;if(scannerStream)scannerStream.getTracks().forEach(t=>t.stop());scannerStream=null;video.srcObject=null;scannerAccepting=false;if(box){box.classList.remove("visible");box.removeAttribute("style")}}
-document.getElementById("scanBtn").onclick=()=>startScanner("lookup");document.getElementById("closeScannerBtn").onclick=stopScanner;
+document.getElementById("scanBtn").onclick=()=>startScanner("lookup");
+document.getElementById("shrinkScanBtn")?.addEventListener("click",()=>startScanner("shrink"));
+document.getElementById("closeScannerBtn").onclick=stopScanner;
 const exportMissingBtn = document.getElementById("exportMissingBtn");
 if (exportMissingBtn) {
   exportMissingBtn.onclick = () => {
@@ -2140,7 +2152,7 @@ ready(function(){
  document.getElementById("drawerBtn")?.addEventListener("click",openDrawer);
  document.getElementById("closeDrawerBtn")?.addEventListener("click",closeDrawer);
  document.getElementById("drawerBackdrop")?.addEventListener("click",closeDrawer);
- document.querySelectorAll("[data-drawer-action]").forEach(btn=>btn.onclick=()=>{let a=btn.dataset.drawerAction;if(a==="dashboard")go("dashboard");else if(a==="lookup")go("lookup");else if(a==="back-stock")go("order");else if(a==="final-order")go("frontStock");else if(a==="favorites")go("favorites");else if(a==="recent")go("recent");else if(a==="orders"||a==="today-order")go("orders");else if(a==="inventory")go("inventory");else if(a==="missing")go("missing");else if(a==="archive")go("archive");else if(a==="data-tools")go("dataTools")});
+ document.querySelectorAll("[data-drawer-action]").forEach(btn=>btn.onclick=()=>{let a=btn.dataset.drawerAction;if(a==="dashboard")go("dashboard");else if(a==="lookup")go("lookup");else if(a==="back-stock")go("order");else if(a==="final-order")go("frontStock");else if(a==="favorites")go("favorites");else if(a==="recent")go("recent");else if(a==="orders"||a==="today-order")go("orders");else if(a==="shrink")go("shrink");else if(a==="inventory")go("inventory");else if(a==="missing")go("missing");else if(a==="archive")go("archive");else if(a==="data-tools")go("dataTools")});
  document.getElementById("mobileMoreBtn")?.addEventListener("click",openDrawer);
  document.getElementById("dataToolsBackBtn")?.addEventListener("click",()=>{if(window.history.length>1)window.history.back();else go("dashboard")});
  document.getElementById("dashGoOrderBtn")?.addEventListener("click",()=>go("orders"));
@@ -2892,4 +2904,130 @@ window.applyOrderLockV30=applyOrderLockV30;
   }
   function refresh(){document.querySelectorAll('.today-order-flow').forEach(renderFlow)}
   ready(()=>{refresh();setTimeout(refresh,300);setTimeout(refresh,1000);document.addEventListener('click',()=>setTimeout(refresh,120),true);document.addEventListener('input',()=>setTimeout(refresh,80),true);window.refreshTodayOrderFlow=refresh});
+})();
+
+
+/* v52.4.8 Basic Shrink Count: catalog search + scanner + quantity/unit capture.
+   Shrink data is intentionally local-only for now and does not touch Product IndexedDB. */
+(function initShrinkCount(){
+  function ready(fn){document.readyState==='loading'?document.addEventListener('DOMContentLoaded',fn,{once:true}):fn()}
+  ready(()=>{
+    const input=document.getElementById('shrinkSearchInput');
+    const clearBtn=document.getElementById('shrinkClearSearchBtn');
+    const countEl=document.getElementById('shrinkSearchCount');
+    const resultsEl=document.getElementById('shrinkSearchResults');
+    const selectedEl=document.getElementById('shrinkSelectedProduct');
+    const todayList=document.getElementById('shrinkTodayList');
+    const todayCount=document.getElementById('shrinkTodayCount');
+    const historyList=document.getElementById('shrinkHistoryList');
+    if(!input||!resultsEl||!selectedEl) return;
+
+    const STORAGE_KEY='mpa_shrink_records_v1';
+    const UNIT_OPTIONS=['each','case','kg','g','lb','oz','ml','L','bunch','bag','pack','tray','box','clamshell','other'];
+    let selectedCode='';
+    let selectedItem=null;
+    let editingId='';
+
+    function esc(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
+    function localDate(){const d=new Date(), y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
+    function loadRecords(){try{const v=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');return Array.isArray(v)?v:[]}catch{return []}}
+    function saveRecords(records){localStorage.setItem(STORAGE_KEY,JSON.stringify(records))}
+    function primaryImage(item){try{return window.ImageLibrary?.primaryImage(item)||item?.image_local||item?.image_url||''}catch{return item?.image_local||item?.image_url||''}}
+    function searchCatalog(term){
+      const query=String(term||'').trim(); if(!query) return [];
+      try{return productService.search({query,filter:'all',limit:40})||[]}
+      catch(error){console.warn('[Shrink] Product search failed',error);const upper=query.toUpperCase();return (items||[]).filter(item=>[item.item_name,item.code,item.brand,item.quantity,item.aliases,item.search_keywords].filter(Boolean).join(' ').toUpperCase().includes(upper)).slice(0,40)}
+    }
+    function unitOptions(selected='each'){return UNIT_OPTIONS.map(u=>`<option value="${esc(u)}" ${u===selected?'selected':''}>${u==='other'?'Other':u}</option>`).join('')}
+    function selectedRecord(){return editingId?loadRecords().find(r=>r.id===editingId):null}
+    function showSelected(item, record=null){
+      selectedItem=item; selectedCode=String(item?.code||''); editingId=record?.id||''; selectedEl.hidden=false;
+      const qty=record?.quantity??''; const unit=record?.unit||'each'; const custom=record?.custom_unit||'';
+      selectedEl.innerHTML=`
+        <strong>${esc(item?.item_name||record?.item_name||'Selected product')}</strong>
+        <span>PLU / Code: ${esc(item?.code||record?.code||'—')}${item?.brand?` · ${esc(item.brand)}`:''}</span>
+        <div class="shrink-entry-card">
+          <div class="shrink-entry-grid">
+            <label>Quantity
+              <div class="shrink-qty-control">
+                <button type="button" class="secondary" data-shrink-dec aria-label="Decrease shrink quantity">−</button>
+                <input class="shrink-qty-input" data-shrink-qty type="number" min="0" step="any" inputmode="decimal" value="${esc(qty)}" placeholder="0">
+                <button type="button" class="secondary" data-shrink-inc aria-label="Increase shrink quantity">+</button>
+              </div>
+            </label>
+            <label>Measurement
+              <div class="shrink-unit-wrap">
+                <select class="shrink-unit-select" data-shrink-unit>${unitOptions(unit)}</select>
+                <input class="shrink-custom-unit" data-shrink-custom type="text" maxlength="30" placeholder="Enter unit" value="${esc(custom)}" ${unit==='other'?'':'hidden'}>
+              </div>
+            </label>
+            <button type="button" class="primary shrink-save-btn" data-shrink-save>${editingId?'Update':'Save'} Shrink</button>
+          </div>
+          <div class="shrink-entry-actions"><small>Record the quantity that is being removed as shrink today.</small></div>
+        </div>`;
+      const qtyEl=selectedEl.querySelector('[data-shrink-qty]');
+      const unitEl=selectedEl.querySelector('[data-shrink-unit]');
+      const customEl=selectedEl.querySelector('[data-shrink-custom]');
+      selectedEl.querySelector('[data-shrink-dec]').onclick=()=>{const n=Math.max(0,(Number(qtyEl.value)||0)-1);qtyEl.value=String(n)};
+      selectedEl.querySelector('[data-shrink-inc]').onclick=()=>{qtyEl.value=String((Number(qtyEl.value)||0)+1)};
+      unitEl.onchange=()=>{customEl.hidden=unitEl.value!=='other'; if(unitEl.value!=='other') customEl.value=''};
+      selectedEl.querySelector('[data-shrink-save]').onclick=()=>saveSelected();
+      qtyEl.focus();
+      renderSearch();
+    }
+    function saveSelected(){
+      if(!selectedItem) return;
+      const qtyEl=selectedEl.querySelector('[data-shrink-qty]'); const unitEl=selectedEl.querySelector('[data-shrink-unit]'); const customEl=selectedEl.querySelector('[data-shrink-custom]');
+      const quantity=Number(qtyEl?.value); let unit=unitEl?.value||'each'; const custom=String(customEl?.value||'').trim();
+      if(!Number.isFinite(quantity)||quantity<=0){qtyEl?.focus(); return toast('Enter a shrink quantity greater than 0.')}
+      if(unit==='other'&&!custom){customEl?.focus(); return toast('Enter the measurement unit.')}
+      const records=loadRecords(); const now=new Date().toISOString(); const date=localDate();
+      if(editingId){
+        const i=records.findIndex(r=>r.id===editingId); if(i>=0) records[i]={...records[i],quantity,unit,custom_unit:unit==='other'?custom:'',updated_at:now};
+      }else{
+        const same=records.findIndex(r=>r.date===date&&String(r.code)===String(selectedItem.code));
+        const rec={id:same>=0?records[same].id:`SHR-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,date,code:String(selectedItem.code||''),item_name:selectedItem.item_name||'Unnamed product',brand:selectedItem.brand||'',quantity,unit,custom_unit:unit==='other'?custom:'',created_at:same>=0?records[same].created_at:now,updated_at:now};
+        if(same>=0) records[same]=rec; else records.push(rec);
+      }
+      saveRecords(records); toast(editingId?'Shrink updated.':'Shrink saved.'); editingId=''; selectedItem=null; selectedCode=''; selectedEl.hidden=true; selectedEl.innerHTML=''; renderToday(); renderHistory(); renderSearch();
+    }
+    function editRecord(record){
+      const found=searchCatalog(record.code).find(i=>String(i.code)===String(record.code))||{code:record.code,item_name:record.item_name,brand:record.brand};
+      showSelected(found,record); selectedEl.scrollIntoView({behavior:'smooth',block:'center'});
+    }
+    function removeRecord(id){
+      const records=loadRecords(); const rec=records.find(r=>r.id===id); if(!rec) return;
+      if(!confirm(`Remove shrink record for ${rec.item_name}?`)) return;
+      saveRecords(records.filter(r=>r.id!==id)); if(editingId===id){editingId='';selectedItem=null;selectedEl.hidden=true;selectedEl.innerHTML=''}; renderToday();renderHistory();toast('Shrink record removed.');
+    }
+    function productRow(item){
+      const article=document.createElement('article'); article.className='shrink-product-result'; const img=primaryImage(item); const secondary=[item.brand,item.quantity,item.organic].filter(Boolean).join(' · ');
+      article.innerHTML=`<div class="shrink-product-thumb">${img?`<img src="${esc(img)}" alt="">`:'No image'}</div><div class="shrink-product-copy"><strong>${esc(item.item_name||'Unnamed product')}</strong><span class="shrink-product-code">PLU / Code ${esc(item.code||'—')}</span>${secondary?`<span>${esc(secondary)}</span>`:''}</div><button type="button" class="shrink-select-btn ${String(item.code)===selectedCode?'secondary':''}">${String(item.code)===selectedCode?'Selected':'Select'}</button>`;
+      article.querySelector('.shrink-select-btn').onclick=()=>showSelected(item); return article;
+    }
+    function renderSearch(){
+      const term=input.value.trim(); clearBtn.hidden=!term; resultsEl.innerHTML='';
+      if(!term){countEl.textContent='Search the catalog to begin';resultsEl.innerHTML='<section class="message shrink-placeholder"><strong>Find an item to record.</strong><span>Search or scan a product, then enter the quantity being shrunk.</span></section>';return}
+      const matches=searchCatalog(term); countEl.textContent=`${matches.length}${matches.length===40?'+':''} ${matches.length===1?'match':'matches'}`;
+      if(!matches.length){resultsEl.innerHTML='<section class="message shrink-placeholder"><strong>No matching product found.</strong><span>Try another product name, PLU, barcode, or brand.</span></section>';return}
+      const frag=document.createDocumentFragment();matches.forEach(item=>frag.appendChild(productRow(item)));resultsEl.appendChild(frag);
+    }
+    function displayUnit(r){return r.unit==='other'?(r.custom_unit||'unit'):r.unit}
+    function renderToday(){
+      if(!todayList) return; const rows=loadRecords().filter(r=>r.date===localDate()).sort((a,b)=>(b.updated_at||'').localeCompare(a.updated_at||''));
+      if(todayCount) todayCount.textContent=`${rows.length} ${rows.length===1?'item':'items'}`; todayList.innerHTML='';
+      if(!rows.length){todayList.innerHTML='<div class="shrink-empty">No shrink recorded today.</div>';return}
+      rows.forEach(r=>{const el=document.createElement('div');el.className='shrink-record-row';el.innerHTML=`<div class="shrink-record-main"><strong>${esc(r.item_name)}</strong><span>PLU / Code ${esc(r.code||'—')}</span></div><div class="shrink-record-qty">${esc(r.quantity)} ${esc(displayUnit(r))}</div><div class="shrink-record-actions"><button type="button" class="secondary" data-edit>Edit</button><button type="button" class="danger" data-remove>Remove</button></div>`;el.querySelector('[data-edit]').onclick=()=>editRecord(r);el.querySelector('[data-remove]').onclick=()=>removeRecord(r.id);todayList.appendChild(el)});
+    }
+    function renderHistory(){
+      if(!historyList) return; const grouped={}; loadRecords().filter(r=>r.date!==localDate()).forEach(r=>(grouped[r.date]??=[]).push(r)); const dates=Object.keys(grouped).sort().reverse(); historyList.innerHTML='';
+      if(!dates.length){historyList.innerHTML='<div class="shrink-empty">No previous shrink history yet.</div>';return}
+      dates.forEach(date=>{const d=document.createElement('details');d.className='shrink-history-day';const rows=grouped[date];d.innerHTML=`<summary>${esc(new Date(date+'T00:00:00').toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}))}<span>${rows.length} ${rows.length===1?'item':'items'}</span></summary><div class="shrink-history-day-body">${rows.map(r=>`<div class="shrink-history-row"><span>${esc(r.item_name)}${r.code?` · ${esc(r.code)}`:''}</span><span>${esc(r.quantity)} ${esc(displayUnit(r))}</span></div>`).join('')}</div>`;historyList.appendChild(d)});
+    }
+
+    input.addEventListener('input',renderSearch); clearBtn.addEventListener('click',()=>{input.value='';input.focus();renderSearch()});
+    window.addEventListener('app:viewchange',()=>{if(document.getElementById('shrinkView')?.classList.contains('active')){renderSearch();renderToday();renderHistory()}});
+    window.renderShrinkProductSearch=renderSearch; window.renderShrinkCount=()=>{renderSearch();renderToday();renderHistory()};
+    renderSearch(); renderToday(); renderHistory();
+  });
 })();

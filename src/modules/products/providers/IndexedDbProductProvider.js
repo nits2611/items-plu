@@ -65,7 +65,18 @@
 
       const initial = await this.primaryProvider.loadInitial();
       const items = initial?.items || [];
-      await this.saveItems(items);
+
+      // The catalog must remain usable even if IndexedDB cannot be written.
+      // This is especially important after a browser has already opened a newer
+      // database version: IndexedDB does not support opening that database with
+      // an older version number (VersionError). In that situation we render the
+      // bundled/local catalog and treat IndexedDB as a cache, not a startup dependency.
+      try {
+        await this.saveItems(items);
+      } catch (error) {
+        console.warn("[Product storage] IndexedDB cache write failed; continuing with local catalog.", error);
+      }
+
       if (!global.localStorage.getItem(this.versionStorageKey)) this.setLocalVersion(this.bundledVersion);
       return { ...initial, version: this.getLocalVersion() };
     }

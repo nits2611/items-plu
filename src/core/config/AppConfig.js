@@ -42,7 +42,7 @@
     storage: Object.freeze({
       storeNamespace: "default-store",
       databaseName: "my-produce-assistant",
-      databaseVersion: 1
+      databaseVersion: 2
     })
   });
 })(window);
