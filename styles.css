@@ -3391,3 +3391,61 @@ body.barcode-options-open{overflow:hidden!important}
  .shrink-today-panel,.shrink-history-panel{margin:10px 10px 0;padding:11px}
  .shrink-record-row{grid-template-columns:minmax(0,1fr) auto}.shrink-record-actions{grid-column:1/-1;justify-content:flex-end}
 }
+
+/* ==========================================================================\n   v52.4.9 top navigation visual alignment\n   Match the app top bar with the drawer brand area for a unified shell.\n   ========================================================================== */
+body.ui-shell-v52 .app-topbar{
+  background:#087763!important;
+  color:#fff!important;
+  border-bottom-color:#076b59!important;
+  box-shadow:0 2px 10px rgba(7,92,78,.20)!important;
+  backdrop-filter:none!important;
+}
+body.ui-shell-v52 .app-topbar .app-brand-copy h1{
+  color:#fff!important;
+}
+body.ui-shell-v52 .app-topbar .app-brand-copy p{
+  color:rgba(255,255,255,.82)!important;
+}
+body.ui-shell-v52 .app-topbar .app-brand-mark{
+  background:rgba(255,255,255,.14)!important;
+  color:#fff!important;
+  border:1px solid rgba(255,255,255,.18)!important;
+}
+body.ui-shell-v52 .app-topbar .drawer-btn{
+  background:rgba(255,255,255,.10)!important;
+  color:#fff!important;
+  border-color:rgba(255,255,255,.34)!important;
+}
+@media(hover:hover) and (pointer:fine){
+  body.ui-shell-v52 .app-topbar .drawer-btn:hover{
+    background:rgba(255,255,255,.17)!important;
+    border-color:rgba(255,255,255,.48)!important;
+  }
+}
+body.ui-shell-v52 .app-topbar .header-status{
+  background:rgba(255,255,255,.11)!important;
+  color:#fff!important;
+  border-color:rgba(255,255,255,.25)!important;
+}
+body.ui-shell-v52 .app-topbar .header-status.is-offline{
+  background:rgba(255,244,237,.14)!important;
+  color:#fff!important;
+  border-color:rgba(255,214,174,.42)!important;
+}
+body.ui-shell-v52 .app-topbar .header-install-btn{
+  background:#fff!important;
+  color:#087763!important;
+  border:1px solid rgba(255,255,255,.72)!important;
+}
+
+
+/* v52.5.0 Shrink submit + daily lock */
+.shrink-today-head-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+#shrinkTodayStatus.is-submitted{background:rgba(8,119,99,.12);border-color:rgba(8,119,99,.25);color:#087763}
+.shrink-submit-bar{margin-top:12px;padding-top:12px;border-top:1px solid var(--border,#d7e2df);display:flex;align-items:center;justify-content:space-between;gap:14px}
+.shrink-submit-bar>div{min-width:0}.shrink-submit-bar strong{display:block;color:var(--text,#16352f);font-size:.9rem}.shrink-submit-bar small{display:block;margin-top:3px;color:var(--muted,#60736f);line-height:1.4}
+#shrinkSubmitBtn{min-height:42px;white-space:nowrap;border-radius:10px}
+#shrinkSubmitBtn:disabled{opacity:.7;cursor:not-allowed}
+.shrink-view.is-shrink-locked .shrink-search-wrap{opacity:.72;background:var(--surface-2,#f6faf8)}
+.shrink-view.is-shrink-locked .shrink-record-row{grid-template-columns:minmax(0,1fr) auto}
+@media(max-width:719px){.shrink-submit-bar{align-items:stretch;flex-direction:column}.shrink-submit-bar #shrinkSubmitBtn{width:100%}.shrink-today-head-actions{gap:5px}}

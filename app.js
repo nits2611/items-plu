@@ -2920,9 +2920,12 @@ window.applyOrderLockV30=applyOrderLockV30;
     const todayList=document.getElementById('shrinkTodayList');
     const todayCount=document.getElementById('shrinkTodayCount');
     const historyList=document.getElementById('shrinkHistoryList');
+    const submitBtn=document.getElementById('shrinkSubmitBtn');
+    const statusEl=document.getElementById('shrinkTodayStatus');
     if(!input||!resultsEl||!selectedEl) return;
 
     const STORAGE_KEY='mpa_shrink_records_v1';
+    const SUBMIT_KEY='mpa_shrink_submitted_v1';
     const UNIT_OPTIONS=['each','case','kg','g','lb','oz','ml','L','bunch','bag','pack','tray','box','clamshell','other'];
     let selectedCode='';
     let selectedItem=null;
@@ -2932,6 +2935,25 @@ window.applyOrderLockV30=applyOrderLockV30;
     function localDate(){const d=new Date(), y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
     function loadRecords(){try{const v=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');return Array.isArray(v)?v:[]}catch{return []}}
     function saveRecords(records){localStorage.setItem(STORAGE_KEY,JSON.stringify(records))}
+    function loadSubmitted(){try{const v=JSON.parse(localStorage.getItem(SUBMIT_KEY)||'{}');return v&&typeof v==='object'?v:{}}catch{return {}}}
+    function isSubmitted(date=localDate()){return Boolean(loadSubmitted()[date]?.submitted_at)}
+    function lockUi(){
+      const locked=isSubmitted();
+      input.disabled=locked; if(clearBtn) clearBtn.disabled=locked;
+      const scan=document.getElementById('shrinkScanBtn'); if(scan) scan.disabled=locked;
+      if(statusEl){statusEl.textContent=locked?'Submitted':'Draft';statusEl.classList.toggle('is-submitted',locked)}
+      if(submitBtn){submitBtn.disabled=locked;submitBtn.textContent=locked?'Submitted & Locked':'Submit Today’s Shrink'}
+      document.getElementById('shrinkView')?.classList.toggle('is-shrink-locked',locked);
+      if(locked&&selectedEl){selectedEl.hidden=true;selectedEl.innerHTML='';selectedItem=null;selectedCode='';editingId=''}
+    }
+    function submitToday(){
+      if(isSubmitted()) return;
+      const rows=loadRecords().filter(r=>r.date===localDate());
+      if(!rows.length) return toast('Add at least one shrink item before submitting.');
+      if(!confirm(`Submit today’s shrink count with ${rows.length} ${rows.length===1?'item':'items'}? You will not be able to edit or remove it afterward.`)) return;
+      const submitted=loadSubmitted(); submitted[localDate()]={submitted_at:new Date().toISOString(),item_count:rows.length}; localStorage.setItem(SUBMIT_KEY,JSON.stringify(submitted));
+      lockUi();renderSearch();renderToday();renderHistory();toast('Today’s shrink submitted and locked.');
+    }
     function primaryImage(item){try{return window.ImageLibrary?.primaryImage(item)||item?.image_local||item?.image_url||''}catch{return item?.image_local||item?.image_url||''}}
     function searchCatalog(term){
       const query=String(term||'').trim(); if(!query) return [];
@@ -2941,6 +2963,7 @@ window.applyOrderLockV30=applyOrderLockV30;
     function unitOptions(selected='each'){return UNIT_OPTIONS.map(u=>`<option value="${esc(u)}" ${u===selected?'selected':''}>${u==='other'?'Other':u}</option>`).join('')}
     function selectedRecord(){return editingId?loadRecords().find(r=>r.id===editingId):null}
     function showSelected(item, record=null){
+      if(isSubmitted()) return toast('Today’s shrink is submitted and locked.');
       selectedItem=item; selectedCode=String(item?.code||''); editingId=record?.id||''; selectedEl.hidden=false;
       const qty=record?.quantity??''; const unit=record?.unit||'each'; const custom=record?.custom_unit||'';
       selectedEl.innerHTML=`
@@ -2976,6 +2999,7 @@ window.applyOrderLockV30=applyOrderLockV30;
       renderSearch();
     }
     function saveSelected(){
+      if(isSubmitted()) return toast('Today’s shrink is submitted and locked.');
       if(!selectedItem) return;
       const qtyEl=selectedEl.querySelector('[data-shrink-qty]'); const unitEl=selectedEl.querySelector('[data-shrink-unit]'); const customEl=selectedEl.querySelector('[data-shrink-custom]');
       const quantity=Number(qtyEl?.value); let unit=unitEl?.value||'each'; const custom=String(customEl?.value||'').trim();
@@ -2992,11 +3016,13 @@ window.applyOrderLockV30=applyOrderLockV30;
       saveRecords(records); toast(editingId?'Shrink updated.':'Shrink saved.'); editingId=''; selectedItem=null; selectedCode=''; selectedEl.hidden=true; selectedEl.innerHTML=''; renderToday(); renderHistory(); renderSearch();
     }
     function editRecord(record){
+      if(isSubmitted(record?.date)) return toast('This shrink count is submitted and locked.');
       const found=searchCatalog(record.code).find(i=>String(i.code)===String(record.code))||{code:record.code,item_name:record.item_name,brand:record.brand};
       showSelected(found,record); selectedEl.scrollIntoView({behavior:'smooth',block:'center'});
     }
     function removeRecord(id){
       const records=loadRecords(); const rec=records.find(r=>r.id===id); if(!rec) return;
+      if(isSubmitted(rec.date)) return toast('This shrink count is submitted and locked.');
       if(!confirm(`Remove shrink record for ${rec.item_name}?`)) return;
       saveRecords(records.filter(r=>r.id!==id)); if(editingId===id){editingId='';selectedItem=null;selectedEl.hidden=true;selectedEl.innerHTML=''}; renderToday();renderHistory();toast('Shrink record removed.');
     }
@@ -3006,6 +3032,8 @@ window.applyOrderLockV30=applyOrderLockV30;
       article.querySelector('.shrink-select-btn').onclick=()=>showSelected(item); return article;
     }
     function renderSearch(){
+      const locked=isSubmitted();
+      if(locked){clearBtn.hidden=true;countEl.textContent='Today’s shrink is submitted and locked';resultsEl.innerHTML='<section class="message shrink-placeholder"><strong>Shrink submitted.</strong><span>Today’s shrink count is locked. A new draft will be available on the next business day.</span></section>';return}
       const term=input.value.trim(); clearBtn.hidden=!term; resultsEl.innerHTML='';
       if(!term){countEl.textContent='Search the catalog to begin';resultsEl.innerHTML='<section class="message shrink-placeholder"><strong>Find an item to record.</strong><span>Search or scan a product, then enter the quantity being shrunk.</span></section>';return}
       const matches=searchCatalog(term); countEl.textContent=`${matches.length}${matches.length===40?'+':''} ${matches.length===1?'match':'matches'}`;
@@ -3017,7 +3045,8 @@ window.applyOrderLockV30=applyOrderLockV30;
       if(!todayList) return; const rows=loadRecords().filter(r=>r.date===localDate()).sort((a,b)=>(b.updated_at||'').localeCompare(a.updated_at||''));
       if(todayCount) todayCount.textContent=`${rows.length} ${rows.length===1?'item':'items'}`; todayList.innerHTML='';
       if(!rows.length){todayList.innerHTML='<div class="shrink-empty">No shrink recorded today.</div>';return}
-      rows.forEach(r=>{const el=document.createElement('div');el.className='shrink-record-row';el.innerHTML=`<div class="shrink-record-main"><strong>${esc(r.item_name)}</strong><span>PLU / Code ${esc(r.code||'—')}</span></div><div class="shrink-record-qty">${esc(r.quantity)} ${esc(displayUnit(r))}</div><div class="shrink-record-actions"><button type="button" class="secondary" data-edit>Edit</button><button type="button" class="danger" data-remove>Remove</button></div>`;el.querySelector('[data-edit]').onclick=()=>editRecord(r);el.querySelector('[data-remove]').onclick=()=>removeRecord(r.id);todayList.appendChild(el)});
+      rows.forEach(r=>{const locked=isSubmitted(r.date);const el=document.createElement('div');el.className='shrink-record-row';el.innerHTML=`<div class="shrink-record-main"><strong>${esc(r.item_name)}</strong><span>PLU / Code ${esc(r.code||'—')}</span></div><div class="shrink-record-qty">${esc(r.quantity)} ${esc(displayUnit(r))}</div>${locked?'':`<div class="shrink-record-actions"><button type="button" class="secondary" data-edit>Edit</button><button type="button" class="danger" data-remove>Remove</button></div>`}`;if(!locked){el.querySelector('[data-edit]').onclick=()=>editRecord(r);el.querySelector('[data-remove]').onclick=()=>removeRecord(r.id)}todayList.appendChild(el)});
+      lockUi();
     }
     function renderHistory(){
       if(!historyList) return; const grouped={}; loadRecords().filter(r=>r.date!==localDate()).forEach(r=>(grouped[r.date]??=[]).push(r)); const dates=Object.keys(grouped).sort().reverse(); historyList.innerHTML='';
@@ -3025,9 +3054,9 @@ window.applyOrderLockV30=applyOrderLockV30;
       dates.forEach(date=>{const d=document.createElement('details');d.className='shrink-history-day';const rows=grouped[date];d.innerHTML=`<summary>${esc(new Date(date+'T00:00:00').toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}))}<span>${rows.length} ${rows.length===1?'item':'items'}</span></summary><div class="shrink-history-day-body">${rows.map(r=>`<div class="shrink-history-row"><span>${esc(r.item_name)}${r.code?` · ${esc(r.code)}`:''}</span><span>${esc(r.quantity)} ${esc(displayUnit(r))}</span></div>`).join('')}</div>`;historyList.appendChild(d)});
     }
 
-    input.addEventListener('input',renderSearch); clearBtn.addEventListener('click',()=>{input.value='';input.focus();renderSearch()});
+    input.addEventListener('input',renderSearch); if(submitBtn) submitBtn.addEventListener('click',submitToday); clearBtn.addEventListener('click',()=>{input.value='';input.focus();renderSearch()});
     window.addEventListener('app:viewchange',()=>{if(document.getElementById('shrinkView')?.classList.contains('active')){renderSearch();renderToday();renderHistory()}});
     window.renderShrinkProductSearch=renderSearch; window.renderShrinkCount=()=>{renderSearch();renderToday();renderHistory()};
-    renderSearch(); renderToday(); renderHistory();
+    lockUi(); renderSearch(); renderToday(); renderHistory();
   });
 })();

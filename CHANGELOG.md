@@ -1,3 +1,10 @@
+## 52.5.0 — Shrink submit + daily lock
+- Added final Submit Today’s Shrink action.
+- Submitted daily shrink records become read-only and cannot be edited or removed.
+- Search, scanner, and quantity entry are disabled after submission for that business day.
+- A new day automatically starts as an editable Draft.
+- No Product IndexedDB or Order storage changes.
+
 
 ## 52.4.7 — Shrink scanner
 - Added the existing contextual camera scanner to Shrink Count.
@@ -502,3 +509,8 @@ No intended changes:
 - Added edit/remove for today's shrink records.
 - Added simple dated shrink history.
 - Shrink data remains local-only and does not change Product IndexedDB.
+
+## v52.4.9 - Top Navigation Visual Alignment
+- Changed the main app top bar from white to `#087763` to visually match the drawer brand/header area.
+- Updated title, subtitle, menu button, connection status, install button, borders, and shadow for appropriate contrast on the dark green surface.
+- No workflow, storage, catalog, order, or Shrink logic changes.
