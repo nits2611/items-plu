@@ -1,3 +1,10 @@
+# v52.5.1 - Shrink Add / Adjust After Submit
+- Submitted Shrink remains locked by default.
+- Added Add / Adjust Shrink action after submission so the same business day can be reopened when more shrink occurs later.
+- Reopened Shrink allows adding, editing and removing records, then can be submitted again.
+- Preserves submission metadata and counts repeated submissions for the day.
+- No Product IndexedDB or Order storage changes.
+
 ## 52.5.0 — Shrink submit + daily lock
 - Added final Submit Today’s Shrink action.
 - Submitted daily shrink records become read-only and cannot be edited or removed.

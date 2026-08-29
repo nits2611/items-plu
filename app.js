@@ -2936,23 +2936,32 @@ window.applyOrderLockV30=applyOrderLockV30;
     function loadRecords(){try{const v=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');return Array.isArray(v)?v:[]}catch{return []}}
     function saveRecords(records){localStorage.setItem(STORAGE_KEY,JSON.stringify(records))}
     function loadSubmitted(){try{const v=JSON.parse(localStorage.getItem(SUBMIT_KEY)||'{}');return v&&typeof v==='object'?v:{}}catch{return {}}}
-    function isSubmitted(date=localDate()){return Boolean(loadSubmitted()[date]?.submitted_at)}
+    function isSubmitted(date=localDate()){const meta=loadSubmitted()[date];if(!meta)return false;if(typeof meta.locked==='boolean')return meta.locked;return Boolean(meta.submitted_at)}
     function lockUi(){
       const locked=isSubmitted();
       input.disabled=locked; if(clearBtn) clearBtn.disabled=locked;
       const scan=document.getElementById('shrinkScanBtn'); if(scan) scan.disabled=locked;
       if(statusEl){statusEl.textContent=locked?'Submitted':'Draft';statusEl.classList.toggle('is-submitted',locked)}
-      if(submitBtn){submitBtn.disabled=locked;submitBtn.textContent=locked?'Submitted & Locked':'Submit Today’s Shrink'}
+      if(submitBtn){submitBtn.disabled=false;submitBtn.textContent=locked?'Add / Adjust Shrink':'Submit Today’s Shrink';submitBtn.classList.toggle('secondary',locked);submitBtn.classList.toggle('primary',!locked)}
       document.getElementById('shrinkView')?.classList.toggle('is-shrink-locked',locked);
       if(locked&&selectedEl){selectedEl.hidden=true;selectedEl.innerHTML='';selectedItem=null;selectedCode='';editingId=''}
     }
     function submitToday(){
-      if(isSubmitted()) return;
+      if(isSubmitted()) return reopenToday();
       const rows=loadRecords().filter(r=>r.date===localDate());
       if(!rows.length) return toast('Add at least one shrink item before submitting.');
       if(!confirm(`Submit today’s shrink count with ${rows.length} ${rows.length===1?'item':'items'}? You will not be able to edit or remove it afterward.`)) return;
-      const submitted=loadSubmitted(); submitted[localDate()]={submitted_at:new Date().toISOString(),item_count:rows.length}; localStorage.setItem(SUBMIT_KEY,JSON.stringify(submitted));
+      const submitted=loadSubmitted(); const date=localDate(); const previous=submitted[date]||{}; submitted[date]={...previous,locked:true,submitted_at:new Date().toISOString(),item_count:rows.length,submission_count:(Number(previous.submission_count)||0)+1}; localStorage.setItem(SUBMIT_KEY,JSON.stringify(submitted));
       lockUi();renderSearch();renderToday();renderHistory();toast('Today’s shrink submitted and locked.');
+    }
+    function reopenToday(){
+      if(!isSubmitted()) return;
+      if(!confirm('Reopen today’s shrink so you can add more items or make corrections? You can submit it again when finished.')) return;
+      const submitted=loadSubmitted(); const date=localDate(); const previous=submitted[date]||{};
+      submitted[date]={...previous,locked:false,reopened_at:new Date().toISOString()};
+      localStorage.setItem(SUBMIT_KEY,JSON.stringify(submitted));
+      lockUi(); renderSearch(); renderToday(); renderHistory(); input.focus();
+      toast('Today’s shrink reopened for additions and adjustments.');
     }
     function primaryImage(item){try{return window.ImageLibrary?.primaryImage(item)||item?.image_local||item?.image_url||''}catch{return item?.image_local||item?.image_url||''}}
     function searchCatalog(term){
@@ -3033,7 +3042,7 @@ window.applyOrderLockV30=applyOrderLockV30;
     }
     function renderSearch(){
       const locked=isSubmitted();
-      if(locked){clearBtn.hidden=true;countEl.textContent='Today’s shrink is submitted and locked';resultsEl.innerHTML='<section class="message shrink-placeholder"><strong>Shrink submitted.</strong><span>Today’s shrink count is locked. A new draft will be available on the next business day.</span></section>';return}
+      if(locked){clearBtn.hidden=true;countEl.textContent='Today’s shrink is submitted and locked';resultsEl.innerHTML='<section class="message shrink-placeholder"><strong>Shrink submitted.</strong><span>Use Add / Adjust Shrink below if more shrink is taken out later today or a correction is needed.</span></section>';return}
       const term=input.value.trim(); clearBtn.hidden=!term; resultsEl.innerHTML='';
       if(!term){countEl.textContent='Search the catalog to begin';resultsEl.innerHTML='<section class="message shrink-placeholder"><strong>Find an item to record.</strong><span>Search or scan a product, then enter the quantity being shrunk.</span></section>';return}
       const matches=searchCatalog(term); countEl.textContent=`${matches.length}${matches.length===40?'+':''} ${matches.length===1?'match':'matches'}`;
