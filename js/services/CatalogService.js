@@ -56,8 +56,9 @@
       const image_url = row.image_url || images[0] || "";
       const notes = row.notes || "";
       const aliases = row.aliases || "";
+      const default_count_unit = String(row.default_count_unit || row.preferred_measurement_unit || row.preferred_measurement || "").trim();
       const search_keywords = row.search_keywords || [item_name, code, quantity, brand, category, type, notes, aliases].join(" ");
-      return { item_name, code, quantity, brand, category, type, images, image_local, image_url, notes, aliases, hay: search_keywords.toLowerCase() };
+      return { item_name, code, quantity, brand, category, type, images, image_local, image_url, notes, aliases, default_count_unit, hay: search_keywords.toLowerCase() };
     }
 
     rowsToItems(rows) {
@@ -163,6 +164,7 @@
             image_url: product.image_url || "",
             notes: storeProduct?.notes || "",
             aliases: aliasText,
+            default_count_unit: product.default_count_unit || product.preferred_measurement_unit || product.preferred_measurement || "",
             search_keywords: [product.search_keywords, aliasText, itemName, code, product.brand, categoryRow?.category_name, quantity].filter(Boolean).join(" ")
           }));
         });

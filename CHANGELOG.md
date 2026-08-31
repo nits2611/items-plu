@@ -1,3 +1,20 @@
+## v52.5.4 - Default Count Unit
+- Corrected the product measurement model so package `unit` and operational count unit are separate concepts.
+- Added `default_count_unit` as the canonical product default for Shrink and future inventory/count workflows.
+- Renamed the Missing Item field to **Default Count Unit**.
+- `quantity` + `unit` remain the product/package size (for example 946 ml); `default_count_unit` can be `each`, `kg`, `case`, etc.
+- Shrink uses `default_count_unit` only as the initial selection; users can override each transaction and saved records retain their actual unit.
+- Added backward-compatible reading of the earlier `preferred_measurement_unit` field so existing temporary data is not discarded.
+
+## v52.5.2 - Preferred Measurement
+- Added `preferred_measurement_unit` as a product/catalog property.
+- Added Preferred Measurement to the Missing Item editor and Missing CSV import/export.
+- Preserved preferred measurement when a Missing Item is promoted into the local catalog.
+- Shrink Count now selects the product preferred measurement by default for new entries; existing shrink records keep their saved unit.
+- Users can still change the unit per shrink record.
+- Added Google Sheets setup guidance for the `products.preferred_measurement_unit` column.
+- No Order storage, Product IndexedDB schema, or Shrink submission/lock behavior changed.
+
 # v52.5.1 - Shrink Add / Adjust After Submit
 - Submitted Shrink remains locked by default.
 - Added Add / Adjust Shrink action after submission so the same business day can be reopened when more shrink occurs later.

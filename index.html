@@ -451,6 +451,28 @@ html:not(.app-ui-ready) #appDrawer{transition:none!important}
         </label>
       </div>
 
+      <label>Default Count Unit
+        <select id="missingDefaultCountUnit">
+          <option value="">No default</option>
+          <option value="each">each</option>
+          <option value="case">case</option>
+          <option value="kg">kg</option>
+          <option value="g">g</option>
+          <option value="lb">lb</option>
+          <option value="oz">oz</option>
+          <option value="ml">ml</option>
+          <option value="L">L</option>
+          <option value="bunch">bunch</option>
+          <option value="bag">bag</option>
+          <option value="pack">pack</option>
+          <option value="tray">tray</option>
+          <option value="box">box</option>
+          <option value="clamshell">clamshell</option>
+          <option value="other">other</option>
+        </select>
+        <small class="field-hint">Used as the default unit in Shrink and future quantity workflows. Users can still change it.</small>
+      </label>
+
       <label>Category
         <input id="missingCategory" type="text" placeholder="Packaged Greens / Herbs / Dips">
       </label>

@@ -58,5 +58,6 @@ Note: build each step from the stable baseline and verify Lookup/product loading
 - [x] Shrink scanner uses existing contextual barcode scanner.
 
 - [x] Basic Shrink Count: quantity + measurement + today list + history
+- [x] Product default count unit across operational quantity workflows (Shrink implemented first)
 
 - [x] Shrink: allow same-day Add / Adjust after submission, then re-submit.

@@ -85,3 +85,16 @@ product_image_id | product_id | image_url | sort_order | is_primary | status
 ```
 
 If the tab exists, its rows are merged into the same frontend `images[]` array. This prepares us for PostgreSQL later, where a one-to-many `product_images` table is preferable to storing an array directly in a relational product row.
+
+
+## Default count unit (v52.5.4)
+
+Add this column to the `products` sheet:
+
+```text
+default_count_unit
+```
+
+This is the product's normal **operational counting/transaction unit**, not its package size unit. Example: a 946 ml juice can have `unit = ml` and `default_count_unit = each`; Banana can use `default_count_unit = kg`. Shrink preselects this value for new entries, but the user can override it for an individual transaction.
+
+Keep `quantity` + `unit` for product/package size (for example `946` + `ml`). Future order units, case-pack conversions, pricing units, and cost units remain separate concepts.

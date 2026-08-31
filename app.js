@@ -726,6 +726,7 @@ if (importMissingCsv) {
         brand: row.brand || "",
         quantity: row.quantity || "",
         unit: row.unit || "",
+        default_count_unit: row.default_count_unit || row.preferred_measurement_unit || row.preferred_measurement || "",
         category: row.category || "",
         organic: row.organic || row.type_quality || row.organic_type || "",
         images: window.ImageLibrary?.normalizeImages(row) || [],
@@ -827,6 +828,7 @@ const missingImageEditor = window.ImageListEditor?.create({
     document.getElementById("missingBrand").value = row?.brand || "";
     document.getElementById("missingQuantity").value = row?.quantity || "";
     document.getElementById("missingUnit").value = row?.unit || "";
+    document.getElementById("missingDefaultCountUnit").value = row?.default_count_unit || row?.preferred_measurement_unit || "";
     document.getElementById("missingCategory").value = row?.category || "";
     missingImageEditor?.setImages(row ? (window.ImageLibrary?.normalizeImages(row) || []) : []);
     {
@@ -863,6 +865,7 @@ const missingImageEditor = window.ImageListEditor?.create({
       brand: formData.brand,
       quantity: formData.quantity,
       unit: formData.unit,
+      default_count_unit: formData.default_count_unit || "",
       category: formData.category,
       organic: formData.organic,
       images: window.ImageLibrary?.normalizeImages([...(formData.images||[]),formData.image_local,formData.image_url]) || [],
@@ -967,6 +970,7 @@ const missingImageEditor = window.ImageListEditor?.create({
         brand: document.getElementById("missingBrand").value.trim(),
         quantity: document.getElementById("missingQuantity").value.trim(),
         unit: document.getElementById("missingUnit").value.trim(),
+        default_count_unit: document.getElementById("missingDefaultCountUnit").value.trim(),
         category: document.getElementById("missingCategory").value.trim(),
         organic: (document.querySelector('input[name="missingOrganic"]:checked')?.value || "Conventional").trim(),
         image_url: document.getElementById("missingImageUrl").value.trim(),
@@ -982,10 +986,10 @@ const missingImageEditor = window.ImageListEditor?.create({
     exportBtn.onclick = () => {
       const list = (typeof missingItems === "function") ? missingItems() : safeGetJSON(storeKey("missing"), []);
       const rows = [
-        "term,item_name,brand,quantity,unit,category,organic,images,image_url,image_local,notes,date",
+        "term,item_name,brand,quantity,unit,default_count_unit,category,organic,images,image_url,image_local,notes,date",
         ...list.map(x => [
           x.term || "", x.item_name || "", x.brand || "", x.quantity || "",
-          x.unit || "", x.category || "", x.organic || "", window.ImageLibrary?.serializeImages(x)||"[]", x.image_url || "", x.image_local || "", x.notes || "", x.date || ""
+          x.unit || "", x.default_count_unit || x.preferred_measurement_unit || "", x.category || "", x.organic || "", window.ImageLibrary?.serializeImages(x)||"[]", x.image_url || "", x.image_local || "", x.notes || "", x.date || ""
         ].map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
       ];
       if (typeof downloadCSV === "function") downloadCSV("missing-items.csv", rows.join("\n"));
@@ -999,7 +1003,7 @@ const missingImageEditor = window.ImageListEditor?.create({
   function csvEscape(v){ return `"${String(v ?? "").replaceAll('"','""')}"`; }
 
   function itemRowsToCSV(rows){
-    const headers = ["item_name","code","quantity","brand","category","type","images","image_local","image_url","notes","aliases","search_keywords","organic"];
+    const headers = ["item_name","code","quantity","brand","category","type","images","image_local","image_url","notes","aliases","search_keywords","organic","default_count_unit"];
     const lines = [headers.join(",")];
     rows.forEach(r => {
       const obj = normalize ? r : r;
@@ -1025,7 +1029,8 @@ const missingImageEditor = window.ImageListEditor?.create({
         notes:x.notes || "",
         aliases:x.aliases || "",
         search_keywords:x.hay ? x.hay.toUpperCase() : search,
-        organic:x.organic || (isOrg && isOrg(x) ? "Organic" : "Conventional")
+        organic:x.organic || (isOrg && isOrg(x) ? "Organic" : "Conventional"),
+        default_count_unit:x.default_count_unit || x.preferred_measurement_unit || ""
       };
     });
     return itemRowsToCSV(rows);
@@ -1064,7 +1069,8 @@ const missingImageEditor = window.ImageListEditor?.create({
       notes: row.notes || "",
       aliases,
       search_keywords: [itemName, code, quantityText, brand, category, organic, aliases].filter(Boolean).join(" ").toUpperCase(),
-      organic
+      organic,
+      default_count_unit: row.default_count_unit || row.preferred_measurement_unit || ""
     };
   }
 
@@ -1086,7 +1092,7 @@ const missingImageEditor = window.ImageListEditor?.create({
 
     const existingCSV = currentItemsCSV();
     const newCSVLines = newRows.map(r => {
-      const headers = ["item_name","code","quantity","brand","category","type","images","image_local","image_url","notes","aliases","search_keywords","organic"];
+      const headers = ["item_name","code","quantity","brand","category","type","images","image_local","image_url","notes","aliases","search_keywords","organic","default_count_unit"];
       return headers.map(h => csvEscape(h === "images" ? (window.ImageLibrary?.serializeImages(r.images || r) || "[]") : (r[h] || ""))).join(",");
     });
     const updatedCSV = existingCSV + "\n" + newCSVLines.join("\n");
@@ -1377,9 +1383,9 @@ renderAll();
   if(exportMissingBtn){
     exportMissingBtn.onclick = () => {
       const rows = [
-        "term,item_name,brand,quantity,unit,category,organic,is_seasonal,season,festival,images,image_url,image_local,notes,date",
+        "term,item_name,brand,quantity,unit,default_count_unit,category,organic,is_seasonal,season,festival,images,image_url,image_local,notes,date",
         ...missingItems().map(x => [
-          x.term||"", x.item_name||"", x.brand||"", x.quantity||"", x.unit||"", x.category||"",
+          x.term||"", x.item_name||"", x.brand||"", x.quantity||"", x.unit||"", x.default_count_unit||"", x.category||"",
           x.organic||"", x.is_seasonal||"", x.season||"", x.festival||"", window.ImageLibrary?.serializeImages(x)||"[]",
           x.image_url||"", x.image_local||"", x.notes||"", x.date||""
         ].map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
@@ -2974,7 +2980,7 @@ window.applyOrderLockV30=applyOrderLockV30;
     function showSelected(item, record=null){
       if(isSubmitted()) return toast('Today’s shrink is submitted and locked.');
       selectedItem=item; selectedCode=String(item?.code||''); editingId=record?.id||''; selectedEl.hidden=false;
-      const qty=record?.quantity??''; const unit=record?.unit||'each'; const custom=record?.custom_unit||'';
+      const qty=record?.quantity??''; const preferred=String(item?.default_count_unit||'').trim(); const unit=record?.unit||(UNIT_OPTIONS.includes(preferred)?preferred:'each'); const custom=record?.custom_unit||'';
       selectedEl.innerHTML=`
         <strong>${esc(item?.item_name||record?.item_name||'Selected product')}</strong>
         <span>PLU / Code: ${esc(item?.code||record?.code||'—')}${item?.brand?` · ${esc(item.brand)}`:''}</span>
