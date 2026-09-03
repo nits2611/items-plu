@@ -68,10 +68,24 @@ html:not(.app-ui-ready) #appDrawer{transition:none!important}
     <div class="app-brand-copy"><h1>My Produce Assistant</h1><p>Produce workflow, simplified.</p></div>
   </div>
   <div class="header-actions">
+    <button id="notificationBellBtn" class="notification-bell-btn" type="button" aria-label="Notifications" aria-expanded="false">
+      <span aria-hidden="true">🔔</span><span id="notificationBadge" class="notification-badge" hidden>0</span>
+    </button>
     <span id="headerOnlineStatus" class="header-status" aria-label="Connection status"><span class="status-dot"></span><span class="header-status-text">Online</span></span>
     <button id="installBtn" class="header-install-btn" hidden>Install</button>
   </div>
 </header>
+<div id="notificationPanel" class="notification-panel" hidden>
+  <div class="notification-panel-head">
+    <div><strong>Notifications</strong><small id="notificationPanelSummary">You're all caught up.</small></div>
+    <div class="notification-panel-head-actions">
+      <button id="notificationMarkAllRead" type="button" class="text-btn">Mark all read</button>
+      <button id="notificationPanelClose" type="button" class="icon-btn" aria-label="Close notifications">×</button>
+    </div>
+  </div>
+  <div id="notificationList" class="notification-list"></div>
+</div>
+
 
 <div id="drawerBackdrop" class="drawer-backdrop" hidden></div>
 <aside id="appDrawer" class="app-drawer" aria-hidden="true">
@@ -89,6 +103,7 @@ html:not(.app-ui-ready) #appDrawer{transition:none!important}
     <button type="button" data-drawer-action="recent"><span class="drawer-icon">◷</span><span>Recent</span></button>
     <div class="drawer-group-title">Work</div>
     <button type="button" data-drawer-action="orders"><span class="drawer-icon">▦</span><span>Order History</span></button>
+    <button type="button" data-drawer-action="workday"><span class="drawer-icon">✓</span><span>My Shift</span></button>
     <button type="button" data-drawer-action="shrink"><span class="drawer-icon">↘</span><span>Shrink Count</span></button>
     <button type="button" data-drawer-action="inventory"><span class="drawer-icon">◫</span><span>Inventory</span></button>
     <button type="button" data-drawer-action="missing"><span class="drawer-icon">?</span><span>Missing Items</span></button>
@@ -279,6 +294,14 @@ html:not(.app-ui-ready) #appDrawer{transition:none!important}
       <span id="dashHeroStatus" class="dashboard-status-pill status-draft">Draft</span>
     </section>
 
+    <section class="dashboard-workday-card" id="dashWorkdayCard">
+      <div class="dashboard-card-head">
+        <div><span class="dashboard-card-kicker">MY SHIFT</span><h3>What should I do next?</h3></div>
+        <button id="dashGoWorkdayBtn" class="dashboard-link-btn" type="button">View My Shift →</button>
+      </div>
+      <div id="dashWorkdayNext"></div>
+    </section>
+
     <section class="dashboard-layout-primary">
       <article class="dashboard-order-card">
         <div class="dashboard-card-head">
@@ -356,6 +379,58 @@ html:not(.app-ui-ready) #appDrawer{transition:none!important}
   <section id="ordersView" class="view">
 <section class="panel section-head"><h2>Orders</h2><p>Today's regular order workflow: record back stock, prepare final order, then mark it placed.</p><div class="order-actions"><button id="continueOrderBtn" type="button">Continue</button><button id="markOrderPlacedBtn" type="button">Mark Placed</button><button id="unlockOrderBtn" type="button">Adjust Order</button></div></section>
 <section class="dashboard-grid"><article class="dashboard-card"><h3>Status</h3><p><span id="orderSessionStatus">Draft</span></p><button id="ordersQuickMarkPlacedBtn" type="button">Mark Placed</button></article><article class="dashboard-card"><h3>Back Stock</h3><p><span id="orderBackCount">0</span> items</p><button id="ordersBackStockBtn" type="button">Open Back Stock</button></article><article class="dashboard-card"><h3>Final Order</h3><p><span id="orderFinalCount">0</span> items</p><button id="ordersFinalOrderBtn" type="button">Open Final Order</button></article></section><section id="ordersHistoryInline" class="order-history-list"></section></section>
+<section id="workdayView" class="view workday-view">
+  <div class="workday-hero">
+    <div><span class="dashboard-card-kicker">WORKDAY ASSISTANT</span><h2>My Shift</h2><p id="workdayDateLabel">Your priorities and tasks for today.</p></div>
+    <button id="workdayAddTaskBtn" class="primary" type="button">+ Add Task</button>
+  </div>
+  <div class="workday-summary">
+    <div><strong id="workdayOpenCount">0</strong><span>Open</span></div>
+    <div><strong id="workdayProgressCount">0</strong><span>In Progress</span></div>
+    <div><strong id="workdayDoneCount">0</strong><span>Completed</span></div>
+    <div><strong id="workdayHighCount">0</strong><span>High Priority</span></div>
+  </div>
+  <section class="panel workday-next-panel"><span class="dashboard-card-kicker">WHAT SHOULD I DO NEXT?</span><div id="workdayNextTask"></div></section>
+  <div class="workday-toolbar">
+    <div class="workday-filters" role="group" aria-label="Task filters"><button type="button" class="active" data-workday-filter="all">All</button><button type="button" data-workday-filter="assigned">Assigned</button><button type="button" data-workday-filter="personal">Personal</button><button type="button" data-workday-filter="completed">Completed</button><button type="button" data-workday-filter="archived">Archived</button></div>
+    <button id="workdayRoadmapBtn" type="button" class="secondary">Roadmaps</button>
+  </div>
+  <section id="workdayTaskList" class="workday-task-list"></section>
+
+  <section id="workdayEditor" class="panel workday-editor" hidden>
+    <div class="shrink-section-head"><div><span class="dashboard-card-kicker">TASK</span><h3 id="workdayEditorTitle">Add Task</h3></div><button id="workdayEditorClose" type="button" class="secondary">Close</button></div>
+    <form id="workdayTaskForm">
+      <input id="workdayTaskId" type="hidden">
+      <div class="workday-form-grid">
+        <label class="workday-field workday-field-wide"><span>Task</span><input id="workdayTaskTitle" required maxlength="120" placeholder="e.g. Check berry display"></label>
+        <label class="workday-field"><span>Priority</span><select id="workdayTaskPriority"><option>High</option><option selected>Medium</option><option>Low</option></select></label>
+        <label class="workday-field"><span>Start / due time</span><input id="workdayTaskDue" type="time"></label>
+        <label class="workday-field"><span>Remind before</span><select id="workdayTaskReminderBefore"><option value="0">No pre-reminder</option><option value="5">5 minutes before</option><option value="10">10 minutes before</option><option value="15">15 minutes before</option><option value="30">30 minutes before</option><option value="60">1 hour before</option></select></label>
+        <label class="workday-field"><span>Custom reminder</span><input id="workdayTaskReminder" type="time"><small>Optional additional reminder.</small></label>
+        <label class="workday-check"><input id="workdayTaskReminderAtStart" type="checkbox" checked><span>Notify again when task time starts</span></label>
+        <label class="workday-field"><span>Repeat</span><select id="workdayTaskRepeat"><option value="once">One time</option><option value="daily">Every day</option><option value="weekdays">Mon–Fri</option><option value="custom">Selected days</option></select></label>
+        <div id="workdayRepeatDays" class="workday-repeat-days" hidden><span>Repeat on</span><div><label><input type="checkbox" value="1">Mon</label><label><input type="checkbox" value="2">Tue</label><label><input type="checkbox" value="3">Wed</label><label><input type="checkbox" value="4">Thu</label><label><input type="checkbox" value="5">Fri</label><label><input type="checkbox" value="6">Sat</label><label><input type="checkbox" value="0">Sun</label></div></div>
+        <label class="workday-check"><input id="workdayTaskRepeatEnabled" type="checkbox" checked><span>Recurring task enabled</span></label>
+        <label class="workday-field"><span>Task type</span><select id="workdayTaskType"><option value="personal">Personal</option><option value="assigned">Manager Assigned</option></select></label>
+        <label class="workday-field"><span>Assigned to</span><input id="workdayTaskAssignee" placeholder="Me / teammate name"></label>
+        <label class="workday-field workday-field-wide"><span>Why this matters</span><input id="workdayTaskWhy" maxlength="220" placeholder="Optional guidance for a new teammate"></label>
+        <label class="workday-field workday-field-wide"><span>Steps <small>(one per line)</small></span><textarea id="workdayTaskSteps" rows="5" placeholder="Inspect quality
+Remove poor items
+Record shrink"></textarea></label>
+        <label class="workday-field"><span>Open app module</span><select id="workdayTaskModule"><option value="">None</option><option value="shrink">Shrink Count</option><option value="order">Back Stock</option><option value="frontStock">Final Order</option><option value="lookup">Lookup</option><option value="missing">Missing Items</option></select></label>
+      </div>
+      <div class="workday-form-actions"><button type="submit" class="primary">Save Task</button></div>
+    </form>
+  </section>
+
+  <section id="workdayRoadmaps" class="panel workday-roadmaps" hidden>
+    <div class="shrink-section-head"><div><span class="dashboard-card-kicker">REUSABLE WORKFLOWS</span><h3>Roadmaps</h3></div><button id="workdayRoadmapsClose" type="button" class="secondary">Close</button></div>
+    <p class="workday-help">Assign a repeatable roadmap to a teammate. V1 includes an Opening Produce Shift template and lets you create your own.</p>
+    <div id="workdayRoadmapList"></div>
+    <details class="workday-roadmap-create"><summary>Create custom roadmap</summary><form id="workdayRoadmapForm"><label class="workday-field"><span>Roadmap name</span><input id="workdayRoadmapTitle" required placeholder="e.g. Closing Produce Shift"></label><label class="workday-field"><span>Tasks <small>(one per line)</small></span><textarea id="workdayRoadmapSteps" required rows="6"></textarea></label><button type="submit" class="primary">Save Roadmap</button></form></details>
+  </section>
+</section>
+
 <section id="shrinkView" class="view shrink-view">
   <section class="panel section-head">
     <h2>Shrink Count</h2>
@@ -664,4 +739,18 @@ html:not(.app-ui-ready) #appDrawer{transition:none!important}
     reveal();
   });
 })();
-</script></body></html>
+</script>
+<div id="workdayStatusPrompt" class="workday-status-prompt" hidden aria-modal="true" role="dialog" aria-labelledby="workdayStatusPromptTitle">
+  <div class="workday-status-prompt-card">
+    <span class="dashboard-card-kicker">ACTIVE TASK</span>
+    <h3 id="workdayStatusPromptTitle">Before you leave…</h3>
+    <p id="workdayStatusPromptText">What is the status of this task?</p>
+    <div class="workday-status-prompt-actions">
+      <button id="workdayPromptCompleted" type="button" class="primary">Completed</button>
+      <button id="workdayPromptProgress" type="button" class="secondary">Still in progress</button>
+      <button id="workdayPromptPaused" type="button" class="secondary">Pause</button>
+      <button id="workdayPromptStay" type="button" class="ghost">Stay here</button>
+    </div>
+  </div>
+</div>
+</body></html>

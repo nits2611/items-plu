@@ -12,6 +12,7 @@
     frontStock: "/final-order",
     dashboard: "/dashboard",
     orders: "/orders",
+    workday: "/my-shift",
     shrink: "/shrink",
     inventory: "/inventory",
     dataTools: "/data-tools"
@@ -68,6 +69,11 @@
     if (!route) {
       console.warn(`[Router] Unknown view: ${view}`);
       return false;
+    }
+
+    if (!opts.bypassGuard && typeof global.__workdayNavigationGuard === "function") {
+      const allowed = global.__workdayNavigationGuard(view);
+      if (allowed === false) return false;
     }
 
     const targetHash = `#${route}`;

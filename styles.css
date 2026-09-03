@@ -2646,6 +2646,8 @@ body.barcode-options-open{overflow:hidden!important}
   background:linear-gradient(180deg,#f7faf9,#edf4f1);
 }
 .image-gallery-image-wrap{
+  grid-column:2;
+  min-width:0;
   min-height:260px;
   max-height:68vh;
   display:grid;
@@ -2662,6 +2664,8 @@ body.barcode-options-open{overflow:hidden!important}
   max-height:68vh;
   object-fit:contain;
 }
+.image-gallery-prev{grid-column:1}
+.image-gallery-next{grid-column:3}
 .image-gallery-nav{
   width:48px;
   height:48px;
@@ -3449,3 +3453,50 @@ body.ui-shell-v52 .app-topbar .header-install-btn{
 .shrink-view.is-shrink-locked .shrink-search-wrap{opacity:.72;background:var(--surface-2,#f6faf8)}
 .shrink-view.is-shrink-locked .shrink-record-row{grid-template-columns:minmax(0,1fr) auto}
 @media(max-width:719px){.shrink-submit-bar{align-items:stretch;flex-direction:column}.shrink-submit-bar #shrinkSubmitBtn{width:100%}.shrink-today-head-actions{gap:5px}}
+
+/* v53.0.0 Workday Assistant */
+.workday-view{max-width:1180px;margin:0 auto}.workday-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}.workday-hero h2{margin:3px 0 4px;font-size:clamp(1.6rem,3vw,2.25rem)}.workday-hero p{margin:0;color:var(--muted,#667085)}.workday-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}.workday-summary>div{background:#fff;border:1px solid #dfe8e5;border-radius:14px;padding:16px}.workday-summary strong{display:block;font-size:1.55rem;color:#087763}.workday-summary span{font-size:.84rem;color:#667085}.workday-next-panel{border-left:4px solid #087763}.workday-next-card{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:10px}.workday-next-card h3{margin:0 0 4px}.workday-next-card p{margin:0;color:#667085}.workday-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:16px 0}.workday-filters{display:flex;gap:7px;flex-wrap:wrap}.workday-filters button{border:1px solid #d6e3df;background:#fff;color:#344054;border-radius:999px;padding:8px 13px}.workday-filters button.active{background:#087763;color:#fff;border-color:#087763}.workday-task-list{display:grid;gap:10px}.workday-task{background:#fff;border:1px solid #dfe8e5;border-radius:15px;padding:14px 16px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:13px;align-items:start}.workday-task.is-done{opacity:.68}.workday-task-check{width:24px;height:24px;margin-top:2px;accent-color:#087763}.workday-task-main{min-width:0}.workday-task-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.workday-task h3{font-size:1rem;margin:0}.workday-task.is-done h3{text-decoration:line-through}.workday-chip{font-size:.7rem;font-weight:700;padding:3px 7px;border-radius:999px;background:#eef5f3;color:#087763}.workday-chip.high{background:#fff0ed;color:#b42318}.workday-chip.assigned{background:#eef4ff;color:#3538cd}.workday-task-meta{margin-top:5px;font-size:.8rem;color:#667085}.workday-task-why{margin:8px 0 0;font-size:.88rem;color:#475467}.workday-task-steps{margin:9px 0 0;padding-left:20px;color:#475467;font-size:.87rem}.workday-task-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.workday-task-actions button{padding:7px 9px;font-size:.8rem}.workday-empty{padding:30px;text-align:center;background:#fff;border:1px dashed #cbd9d5;border-radius:15px;color:#667085}.workday-editor,.workday-roadmaps{margin-top:18px}.workday-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.workday-field{display:grid;gap:6px}.workday-field>span{font-size:.82rem;font-weight:700;color:#344054}.workday-field input,.workday-field select,.workday-field textarea{width:100%;border:1px solid #cfdad7;border-radius:10px;padding:10px 11px;background:#fff;color:#101828;font:inherit}.workday-field-wide{grid-column:1/-1}.workday-form-actions{margin-top:14px;display:flex;justify-content:flex-end}.workday-help{color:#667085}.workday-roadmap-card{border:1px solid #dfe8e5;border-radius:13px;padding:14px;margin-top:10px}.workday-roadmap-card h4{margin:0 0 5px}.workday-roadmap-card p{margin:0 0 10px;color:#667085;font-size:.86rem}.workday-roadmap-assign{display:flex;gap:8px;align-items:center}.workday-roadmap-assign input{min-width:0;flex:1;border:1px solid #cfdad7;border-radius:9px;padding:9px}.workday-roadmap-create{margin-top:14px;border-top:1px solid #e5ecea;padding-top:12px}.workday-roadmap-create summary{cursor:pointer;font-weight:700;color:#087763}.workday-roadmap-create form{display:grid;gap:12px;margin-top:12px}
+@media(max-width:700px){.workday-hero{align-items:stretch;flex-direction:column}.workday-hero .primary{width:100%}.workday-summary{grid-template-columns:repeat(3,1fr);gap:7px}.workday-summary>div{padding:11px}.workday-summary strong{font-size:1.25rem}.workday-toolbar{align-items:stretch;flex-direction:column}.workday-toolbar>.secondary{width:100%}.workday-task{grid-template-columns:auto minmax(0,1fr)}.workday-task-actions{grid-column:2;justify-content:flex-start}.workday-form-grid{grid-template-columns:1fr}.workday-field-wide{grid-column:auto}.workday-next-card{align-items:stretch;flex-direction:column}.workday-next-card button{width:100%}.workday-roadmap-assign{flex-direction:column;align-items:stretch}}
+
+
+/* v53.0.2 Workday lifecycle + dashboard */
+.dashboard-workday-card{background:#fff;border:1px solid var(--ui-line,#dfe8e5);border-radius:18px;box-shadow:var(--ui-shadow-sm);padding:17px;margin-bottom:14px}
+.dashboard-workday-next{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border:1px solid #dfe8e5;border-radius:14px;background:#fbfdfc}
+.dashboard-workday-copy{min-width:0}.dashboard-workday-copy>div{display:flex;gap:6px;flex-wrap:wrap}.dashboard-workday-copy h4{margin:7px 0 3px;font-size:1rem;color:var(--ui-ink,#16352f)}.dashboard-workday-copy small{color:#667085;font-weight:650}
+.dashboard-workday-actions,.workday-next-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.dashboard-workday-clear{display:flex;align-items:center;gap:10px;padding:12px}.dashboard-workday-clear>span{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:#eaf8ef;color:#067647;font-weight:900}.dashboard-workday-clear>div{display:flex;flex-direction:column}.dashboard-workday-clear small{color:#667085}
+.workday-summary{grid-template-columns:repeat(4,1fr)}
+.workday-task-state{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#eef5f3;color:#087763;font-weight:900;margin-top:1px}
+.workday-task.is-done .workday-task-state{background:#eaf8ef;color:#067647}.workday-task.is-archived{opacity:.72}
+.workday-status-chip{font-size:.7rem;font-weight:800;padding:3px 7px;border-radius:999px;background:#f2f4f7;color:#475467}
+.workday-status-chip.in_progress{background:#fff4d7;color:#b54708}.workday-status-chip.completed{background:#eaf8ef;color:#067647}
+.workday-field small{color:#667085;font-size:.72rem;line-height:1.3}
+@media(max-width:700px){
+ .dashboard-workday-next{align-items:stretch;flex-direction:column}.dashboard-workday-actions{justify-content:stretch}.dashboard-workday-actions button{flex:1}
+ .workday-summary{grid-template-columns:repeat(2,1fr)}
+}
+
+
+/* v53.0.3 responsive in-app task notifications */
+.workday-notification-stack{position:fixed;z-index:3600;right:18px;bottom:18px;width:min(380px,calc(100vw - 28px));display:flex;flex-direction:column;gap:10px;pointer-events:none}
+.workday-notification{pointer-events:auto;background:#fff;border:1px solid #d8e5e1;border-radius:16px;box-shadow:0 18px 50px rgba(8,55,47,.2);padding:14px;animation:wdNotifyIn .2s ease}
+.workday-notification-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.workday-notification-kicker{font-size:.68rem;font-weight:900;letter-spacing:.09em;color:#087763}.workday-notification h4{margin:3px 0 2px;color:#15312b;font-size:.98rem}.workday-notification p{margin:0;color:#667085;font-size:.82rem;font-weight:650}.workday-notification-close{border:0;background:transparent;font-size:1.05rem;cursor:pointer;color:#667085}.workday-notification-actions{display:flex;gap:7px;margin-top:11px;justify-content:flex-end}.workday-notification-actions button{min-height:36px}
+@keyframes wdNotifyIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media(max-width:700px){.workday-notification-stack{top:calc(12px + env(safe-area-inset-top));bottom:auto;left:50%;right:auto;transform:translateX(-50%);width:min(94vw,420px)}.workday-notification{box-shadow:0 14px 40px rgba(8,55,47,.22)}}
+
+
+/* v53.0.4 recurring tasks + active task handoff */
+.workday-repeat-days{grid-column:1/-1;border:1px solid #dfe8e5;border-radius:12px;padding:10px 12px}.workday-repeat-days>span{display:block;font-size:.78rem;font-weight:800;margin-bottom:8px;color:#475467}.workday-repeat-days>div{display:flex;gap:8px;flex-wrap:wrap}.workday-repeat-days label{display:flex;align-items:center;gap:5px;background:#f7faf9;border-radius:9px;padding:7px 9px;font-size:.78rem;font-weight:750}.workday-status-chip.paused{background:#eef2ff;color:#4338ca}.workday-status-prompt{position:fixed;inset:0;z-index:9999;background:rgba(13,31,27,.42);display:grid;place-items:center;padding:18px}.workday-status-prompt[hidden]{display:none}.workday-status-prompt-card{width:min(520px,100%);background:#fff;border-radius:18px;padding:20px;box-shadow:0 22px 60px rgba(0,0,0,.22)}.workday-status-prompt-card h3{margin:5px 0 7px}.workday-status-prompt-card p{margin:0 0 16px;color:#667085}.workday-status-prompt-actions{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.workday-status-prompt-actions button{min-height:42px}@media(max-width:600px){.workday-status-prompt{align-items:end}.workday-status-prompt-card{border-radius:18px 18px 0 0;margin-bottom:-18px}.workday-status-prompt-actions{grid-template-columns:1fr}}
+
+
+/* v53.0.5 Notification Center */
+.notification-bell-btn{position:relative;width:38px;height:38px;border:1px solid rgba(255,255,255,.24);border-radius:11px;background:rgba(255,255,255,.1);display:grid;place-items:center;font-size:1rem;cursor:pointer;color:#fff}
+.notification-bell-btn:hover{background:rgba(255,255,255,.18)}
+.notification-badge{position:absolute;right:-5px;top:-6px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:#d92d20;color:#fff;font-size:.65rem;font-weight:900;line-height:18px;text-align:center;border:2px solid #087763}
+.notification-panel{position:fixed;z-index:1200;right:18px;top:67px;width:min(420px,calc(100vw - 28px));max-height:min(650px,calc(100vh - 90px));background:#fff;border:1px solid #dfe8e5;border-radius:16px;box-shadow:0 18px 55px rgba(16,48,42,.22);overflow:hidden}
+.notification-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 15px;border-bottom:1px solid #e8eeec}.notification-panel-head>div:first-child{display:flex;flex-direction:column;gap:2px}.notification-panel-head strong{color:#16352f}.notification-panel-head small{color:#667085}.notification-panel-head-actions{display:flex;align-items:center;gap:7px}.notification-panel .text-btn{border:0;background:transparent;color:#087763;font-weight:800;font-size:.75rem;cursor:pointer}.notification-panel .icon-btn{width:31px;height:31px;border:1px solid #dfe8e5;border-radius:9px;background:#fff;cursor:pointer;font-size:1.2rem}
+.notification-list{overflow:auto;max-height:calc(min(650px,100vh - 90px) - 65px)}
+.notification-item{display:grid;grid-template-columns:9px 1fr;gap:10px;padding:14px 15px;border-bottom:1px solid #eef2f1;background:#fff}.notification-item.is-unread{background:#f4fbf8}.notification-dot{width:7px;height:7px;border-radius:50%;background:transparent;margin-top:7px}.notification-item.is-unread .notification-dot{background:#087763}
+.notification-copy{min-width:0}.notification-title-row{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.notification-title-row strong{font-size:.88rem;color:#16352f}.notification-title-row small{font-size:.68rem;color:#98a2b3;white-space:nowrap}.notification-copy p{margin:5px 0 9px;color:#475467;font-size:.8rem;line-height:1.45}.notification-actions{display:flex;gap:6px;flex-wrap:wrap}.notification-actions button{font-size:.72rem;padding:6px 9px}
+.notification-empty{padding:35px 20px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px;color:#667085}.notification-empty>span{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#eaf8ef;color:#067647;font-weight:900}.notification-empty strong{color:#344054}
+@media(max-width:700px){.notification-panel{top:61px;right:50%;transform:translateX(50%);width:calc(100vw - 20px);max-height:70vh;border-radius:14px}.notification-list{max-height:calc(70vh - 65px)}.header-actions{gap:5px}.notification-title-row{gap:6px}}

@@ -1,3 +1,57 @@
+# v53.0.5 — Notification Center
+
+- Added navbar notification bell with unread badge.
+- Added desktop dropdown/mobile notification panel.
+- Added persistent unread/read/dismissed notification states.
+- Generates missed task-reminder notifications when the app is reopened/focused after a reminder time.
+- Added View Task and linked-module Open actions.
+- Keeps notification history separate from the My Shift task list.
+- v53.0.4 task/reminder behavior retained.
+
+# v53.0.4 — Recurring tasks + active task handoff
+
+- Added reusable recurring tasks: daily, weekdays, or selected weekdays.
+- Recurring definitions automatically materialize only on matching days.
+- Added Paused status and Resume action.
+- Opening a linked module from a task starts/resumes it but does not complete it.
+- Leaving a task-launched module asks: Completed, Still in progress, Pause, or Stay here.
+- Existing reminder/notification and product image viewer fixes retained.
+
+# v53.0.3 — Reminder UX + product image viewer fix
+
+- Fixed single-product image gallery regression where the image area collapsed into the navigation grid column and displayed the product image extremely small.
+- Added responsive in-app task notifications: desktop bottom-right, phone top-center.
+- Added pre-reminders (5/10/15/30/60 minutes before task time).
+- Added optional notification at task start time while retaining custom reminder time.
+- Reminder cards support Start, Open linked module, and Dismiss.
+- System/browser notifications are also used when permission is granted and the app is running.
+- Completed/archived tasks do not notify.
+- v53.0.2 remains the rollback baseline.
+
+# v53.0.2 — Workday lifecycle + dashboard
+
+- Added My Shift next-task card to Dashboard with Start, Open and Done actions.
+- Added explicit Not Started → In Progress → Completed task lifecycle.
+- Records task start and completion times.
+- Added Undo for completed tasks.
+- Added Archive/Restore and Archived filter.
+- Added local task reminder time with toast/browser notification while the app is open.
+- Existing v53.0.1 route fix retained.
+- No Product, Order, Shrink, or IndexedDB architecture changes.
+
+# v53.0.1 — My Shift navigation fix
+
+- Fixed My Shift drawer navigation by registering the Workday Assistant route (`#/my-shift`) in the central router.
+- No workflow/storage changes.
+
+# v53.0.0 — Workday Assistant V1
+
+- Added My Shift / Workday Assistant.
+- Personal and manager-assigned tasks.
+- Priority, due time, guidance, checklist steps and linked app modules.
+- Reusable roadmap templates with Opening Produce Shift built in.
+- Local-first V1 persistence; no changes to stable Product, Order or Shrink storage.
+
 ## v52.5.4 - Default Count Unit
 - Corrected the product measurement model so package `unit` and operational count unit are separate concepts.
 - Added `default_count_unit` as the canonical product default for Shrink and future inventory/count workflows.

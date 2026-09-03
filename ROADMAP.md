@@ -61,3 +61,7 @@ Note: build each step from the stable baseline and verify Lookup/product loading
 - [x] Product default count unit across operational quantity workflows (Shrink implemented first)
 
 - [x] Shrink: allow same-day Add / Adjust after submission, then re-submit.
+
+
+## Workday Assistant V1 — implemented in v53.0.0
+Personal tasks, assigned tasks, priorities, due times, guidance/checklists, reusable roadmaps and links to existing workflow modules.

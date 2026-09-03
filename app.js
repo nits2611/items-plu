@@ -2158,7 +2158,7 @@ ready(function(){
  document.getElementById("drawerBtn")?.addEventListener("click",openDrawer);
  document.getElementById("closeDrawerBtn")?.addEventListener("click",closeDrawer);
  document.getElementById("drawerBackdrop")?.addEventListener("click",closeDrawer);
- document.querySelectorAll("[data-drawer-action]").forEach(btn=>btn.onclick=()=>{let a=btn.dataset.drawerAction;if(a==="dashboard")go("dashboard");else if(a==="lookup")go("lookup");else if(a==="back-stock")go("order");else if(a==="final-order")go("frontStock");else if(a==="favorites")go("favorites");else if(a==="recent")go("recent");else if(a==="orders"||a==="today-order")go("orders");else if(a==="shrink")go("shrink");else if(a==="inventory")go("inventory");else if(a==="missing")go("missing");else if(a==="archive")go("archive");else if(a==="data-tools")go("dataTools")});
+ document.querySelectorAll("[data-drawer-action]").forEach(btn=>btn.onclick=()=>{let a=btn.dataset.drawerAction;if(a==="dashboard")go("dashboard");else if(a==="lookup")go("lookup");else if(a==="back-stock")go("order");else if(a==="final-order")go("frontStock");else if(a==="favorites")go("favorites");else if(a==="recent")go("recent");else if(a==="orders"||a==="today-order")go("orders");else if(a==="workday")go("workday");else if(a==="shrink")go("shrink");else if(a==="inventory")go("inventory");else if(a==="missing")go("missing");else if(a==="archive")go("archive");else if(a==="data-tools")go("dataTools")});
  document.getElementById("mobileMoreBtn")?.addEventListener("click",openDrawer);
  document.getElementById("dataToolsBackBtn")?.addEventListener("click",()=>{if(window.history.length>1)window.history.back();else go("dashboard")});
  document.getElementById("dashGoOrderBtn")?.addEventListener("click",()=>go("orders"));
@@ -3074,4 +3074,309 @@ window.applyOrderLockV30=applyOrderLockV30;
     window.renderShrinkProductSearch=renderSearch; window.renderShrinkCount=()=>{renderSearch();renderToday();renderHistory()};
     lockUi(); renderSearch(); renderToday(); renderHistory();
   });
+})();
+
+
+/* v53.0.2 Workday Assistant — dashboard + task lifecycle + archive + reminders */
+(function(){
+  const TASK_KEY="mpa_workday_tasks_v1", ROADMAP_KEY="mpa_workday_roadmaps_v1", TEMPLATE_KEY="mpa_workday_templates_v1", ACTIVE_KEY="mpa_workday_active_task_v1";
+  let filter="all";
+  const $=id=>document.getElementById(id);
+  const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`};
+  const read=(k,f=[])=>{try{const v=JSON.parse(localStorage.getItem(k)||"null");return Array.isArray(v)?v:f}catch{return f}};
+  const write=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+  const esc=v=>String(v??"").replace(/[&<>\"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'\"':"&quot;","'":"&#39;"}[c]));
+  const uid=()=>`wd_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  const fmtTime=ts=>ts?new Date(ts).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"";
+  function normalize(t){
+    const status=t.status||(t.done?"completed":"not_started");
+    return {...t,status,done:status==="completed",archived:!!t.archived,startedAt:t.startedAt||null,pausedAt:t.pausedAt||null,completedAt:t.completedAt||null,templateId:t.templateId||null,repeat:t.repeat||"once",repeatDays:Array.isArray(t.repeatDays)?t.repeatDays:[],reminder:t.reminder||"",reminderBefore:Number(t.reminderBefore||0),reminderAtStart:t.reminderAtStart!==false,reminderNotifiedAt:t.reminderNotifiedAt||null,preReminderNotifiedAt:t.preReminderNotifiedAt||null,startReminderNotifiedAt:t.startReminderNotifiedAt||null};
+  }
+  function tasks(){return read(TASK_KEY).filter(t=>t.date===today()).map(normalize)}
+  function allTasks(){return read(TASK_KEY).map(normalize)}
+  function saveDay(list){
+    write(TASK_KEY,[...allTasks().filter(t=>t.date!==today()),...list]);
+    window.dispatchEvent(new CustomEvent("workday:changed"));
+  }
+  function defaultRoadmaps(){return [{id:"opening-produce",title:"Opening Produce Shift",builtin:true,steps:["Department quality walk","Morning shrink","Check flyer / promotions","Fill priority displays","Receive delivery","Count Back Stock","Prepare Final Order"]}]}
+  function roadmaps(){const custom=read(ROADMAP_KEY);return [...defaultRoadmaps(),...custom]}
+  function priorityRank(p){return p==="High"?0:p==="Medium"?1:2}
+  function sorted(list){return [...list].sort((a,b)=>(a.status==="completed")-(b.status==="completed")||priorityRank(a.priority)-priorityRank(b.priority)||(a.due||"99:99").localeCompare(b.due||"99:99")||(a.createdAt||0)-(b.createdAt||0))}
+  function moduleLabel(v){return {shrink:"Shrink Count",order:"Back Stock",frontStock:"Final Order",lookup:"Lookup",missing:"Missing Items"}[v]||""}
+  function openModule(v,taskId){if(!v||typeof switchView!=="function")return;let t=taskId?tasks().find(x=>x.id===taskId):null;if(t&&t.status!=="completed"){if(t.status!=="in_progress")startTask(t.id);t=tasks().find(x=>x.id===taskId);setActiveContext(t)}switchView(v,{bypassGuard:true})}
+  function statusLabel(t){return t.status==="in_progress"?"In Progress":t.status==="paused"?"Paused":t.status==="completed"?"Completed":"Not Started"}
+  function timeMeta(t){
+    const bits=[];
+    if(t.startedAt)bits.push(`Started ${fmtTime(t.startedAt)}`);
+    if(t.pausedAt&&t.status==="paused")bits.push(`Paused ${fmtTime(t.pausedAt)}`);
+    if(t.completedAt)bits.push(`Done ${fmtTime(t.completedAt)}`);
+    if(t.reminder)bits.push(`Reminder ${t.reminder}`);
+    return bits.join(" • ");
+  }
+  function templates(){return read(TEMPLATE_KEY)}
+  function saveTemplates(v){write(TEMPLATE_KEY,v)}
+  function repeatMatches(t,date=new Date()){const d=date.getDay();if(!t.enabled)return false;if(t.repeat==="daily")return true;if(t.repeat==="weekdays")return d>=1&&d<=5;if(t.repeat==="custom")return (t.repeatDays||[]).map(Number).includes(d);return false}
+  function materializeRecurring(){
+    const day=today(), list=tasks(), ids=new Set(list.map(x=>x.templateId).filter(Boolean)); let changed=false;
+    templates().forEach(t=>{if(!repeatMatches(t)||ids.has(t.id))return;list.push(normalize({...t,id:uid(),templateId:t.id,date:day,status:"not_started",done:false,archived:false,startedAt:null,pausedAt:null,completedAt:null,createdAt:Date.now()}));changed=true});
+    if(changed)saveDay(list);
+  }
+  function nextTask(list=tasks()){return sorted(list.filter(t=>!t.archived&&t.status!=="completed"))[0]||null}
+  function updateTask(id,fn){
+    const list=tasks(),t=list.find(x=>x.id===id);if(!t)return null;
+    fn(t);saveDay(list);render();renderDashboardWorkday();return t;
+  }
+  function startTask(id){
+    return updateTask(id,t=>{if(t.status==="completed")return;t.status="in_progress";t.done=false;t.startedAt=t.startedAt||Date.now();t.pausedAt=null;});
+  }
+  function completeTask(id){
+    return updateTask(id,t=>{t.status="completed";t.done=true;t.startedAt=t.startedAt||Date.now();t.pausedAt=null;t.completedAt=Date.now();sessionStorage.removeItem(ACTIVE_KEY);});
+  }
+  function undoTask(id){
+    return updateTask(id,t=>{t.status="not_started";t.done=false;t.startedAt=null;t.pausedAt=null;t.completedAt=null;});
+  }
+  function archiveTask(id){return updateTask(id,t=>{t.archived=true;});}
+  function restoreTask(id){return updateTask(id,t=>{t.archived=false;});}
+  function pauseTask(id){return updateTask(id,t=>{if(t.status!=="completed"){t.status="paused";t.done=false;t.pausedAt=Date.now();}})}
+  function activeContext(){try{return JSON.parse(sessionStorage.getItem(ACTIVE_KEY)||"null")}catch{return null}}
+  function setActiveContext(task){if(task?.module)sessionStorage.setItem(ACTIVE_KEY,JSON.stringify({taskId:task.id,module:task.module,title:task.title}))}
+  function clearActiveContext(){sessionStorage.removeItem(ACTIVE_KEY)}
+
+
+  function renderDashboardWorkday(){
+    const box=$("dashWorkdayNext"); if(!box)return;
+    const list=tasks().filter(t=>!t.archived), next=nextTask(list);
+    if(!next){
+      box.innerHTML='<div class="dashboard-workday-clear"><span>✓</span><div><b>All caught up</b><small>No open tasks for today.</small></div></div>';
+      return;
+    }
+    box.innerHTML=`<div class="dashboard-workday-next" data-dash-wd-id="${esc(next.id)}">
+      <div class="dashboard-workday-copy">
+        <div><span class="workday-chip ${String(next.priority).toLowerCase()}">${esc(next.priority)}</span><span class="workday-status-chip ${next.status}">${statusLabel(next)}</span></div>
+        <h4>${esc(next.title)}</h4>
+        <small>${next.due?`Due ${esc(next.due)}`:"No due time"}${next.startedAt?` • Started ${fmtTime(next.startedAt)}`:""}${next.reminder?` • Reminder ${esc(next.reminder)}`:""}</small>
+      </div>
+      <div class="dashboard-workday-actions">
+        ${next.status==="not_started"?`<button type="button" class="secondary" data-dash-wd-start>Start</button>`:""}
+        ${next.module?`<button type="button" class="secondary" data-dash-wd-open="${esc(next.module)}">Open</button>`:""}
+        <button type="button" class="primary" data-dash-wd-done>Done</button>
+      </div>
+    </div>`;
+  }
+
+  function render(){
+    if(!$("workdayView"))return;
+    const list=tasks(), active=list.filter(t=>!t.archived), open=active.filter(t=>t.status!=="completed"), done=active.filter(t=>t.status==="completed");
+    if($("workdayDateLabel")) $("workdayDateLabel").textContent=new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+    $("workdayOpenCount").textContent=open.length;
+    $("workdayProgressCount").textContent=active.filter(t=>t.status==="in_progress").length;
+    $("workdayDoneCount").textContent=done.length;
+    $("workdayHighCount").textContent=open.filter(t=>t.priority==="High").length;
+
+    const next=nextTask(active), nextBox=$("workdayNextTask");
+    nextBox.innerHTML=next?`<div class="workday-next-card" data-wd-id="${esc(next.id)}"><div><div class="workday-task-top"><h3>${esc(next.title)}</h3><span class="workday-status-chip ${next.status}">${statusLabel(next)}</span></div><p>${next.priority} priority${next.due?` • Due ${esc(next.due)}`:""}${next.startedAt?` • Started ${fmtTime(next.startedAt)}`:""}${next.type==="assigned"?` • Assigned${next.assignee?` to ${esc(next.assignee)}`:""}`:""}</p></div><div class="workday-next-actions">${next.status==="not_started"?`<button type="button" class="secondary" data-wd-start="${esc(next.id)}">Start</button>`:""}${next.module?`<button type="button" class="secondary" data-wd-open="${esc(next.module)}">Open ${esc(moduleLabel(next.module))}</button>`:""}<button type="button" class="primary" data-wd-done="${esc(next.id)}">Done</button></div></div>`:'<div class="workday-empty">You are all caught up for today.</div>';
+
+    let visible=sorted(list).filter(t=>{
+      if(filter==="archived")return t.archived;
+      if(t.archived)return false;
+      if(filter==="all")return true;
+      if(filter==="completed")return t.status==="completed";
+      return t.type===filter;
+    });
+    const box=$("workdayTaskList");
+    box.innerHTML=visible.length?visible.map(t=>`<article class="workday-task ${t.status==="completed"?"is-done":""} ${t.archived?"is-archived":""}" data-wd-id="${esc(t.id)}">
+      <div class="workday-task-state">${t.status==="completed"?"✓":t.status==="in_progress"?"▶":t.status==="paused"?"Ⅱ":"○"}</div>
+      <div class="workday-task-main">
+        <div class="workday-task-top"><h3>${esc(t.title)}</h3><span class="workday-chip ${String(t.priority).toLowerCase()}">${esc(t.priority)}</span><span class="workday-status-chip ${t.status}">${statusLabel(t)}</span>${t.type==="assigned"?'<span class="workday-chip assigned">Assigned</span>':'<span class="workday-chip">Personal</span>'}${t.templateId?'<span class="workday-chip">Recurring</span>':''}</div>
+        <div class="workday-task-meta">${t.due?`Due ${esc(t.due)} • `:""}${t.assignee?`${esc(t.assignee)} • `:""}${t.module?`Linked to ${esc(moduleLabel(t.module))}`:""}${timeMeta(t)?`${t.module?" • ":""}${esc(timeMeta(t))}`:""}</div>
+        ${t.why?`<p class="workday-task-why"><strong>Why:</strong> ${esc(t.why)}</p>`:""}${t.steps?.length?`<ol class="workday-task-steps">${t.steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:""}
+      </div>
+      <div class="workday-task-actions">
+        ${!t.archived&&(t.status==="not_started"||t.status==="paused")?`<button type="button" class="secondary" data-wd-start="${esc(t.id)}">${t.status==="paused"?"Resume":"Start"}</button>`:""}
+        ${!t.archived&&t.status!=="completed"?`<button type="button" class="primary" data-wd-done="${esc(t.id)}">Done</button>`:""}
+        ${!t.archived&&t.status==="completed"?`<button type="button" class="secondary" data-wd-undo="${esc(t.id)}">Undo</button>`:""}
+        ${!t.archived&&t.module?`<button type="button" class="secondary" data-wd-open="${esc(t.module)}">Open</button>`:""}
+        ${!t.archived?`<button type="button" class="secondary" data-wd-edit="${esc(t.id)}">Edit</button>`:""}
+        ${!t.archived&&t.status==="completed"?`<button type="button" class="secondary" data-wd-archive="${esc(t.id)}">Archive</button>`:""}
+        ${t.archived?`<button type="button" class="secondary" data-wd-restore="${esc(t.id)}">Restore</button>`:""}
+        <button type="button" class="secondary" data-wd-delete="${esc(t.id)}">Remove</button>
+      </div>
+    </article>`).join(""):'<div class="workday-empty">No tasks in this view.</div>';
+    renderDashboardWorkday();
+  }
+
+  function showEditor(task=null){
+    $("workdayEditor").hidden=false;$("workdayRoadmaps").hidden=true;$("workdayEditorTitle").textContent=task?"Edit Task":"Add Task";
+    $("workdayTaskId").value=task?.id||"";$("workdayTaskTitle").value=task?.title||"";$("workdayTaskPriority").value=task?.priority||"Medium";$("workdayTaskDue").value=task?.due||"";$("workdayTaskReminderBefore").value=String(task?.reminderBefore||0);$("workdayTaskReminderAtStart").checked=task?.reminderAtStart!==false;$("workdayTaskReminder").value=task?.reminder||"";$("workdayTaskRepeat").value=task?.repeat||"once";$("workdayTaskRepeatEnabled").checked=task?.repeatEnabled!==false;document.querySelectorAll("#workdayRepeatDays input").forEach(x=>x.checked=(task?.repeatDays||[]).map(Number).includes(Number(x.value)));toggleRepeatDays();$("workdayTaskType").value=task?.type||"personal";$("workdayTaskAssignee").value=task?.assignee||"";$("workdayTaskWhy").value=task?.why||"";$("workdayTaskSteps").value=(task?.steps||[]).join("\n");$("workdayTaskModule").value=task?.module||"";
+    $("workdayEditor").scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  async function maybeEnableNotifications(reminder){
+    if(!reminder||!("Notification" in window)||Notification.permission!=="default")return;
+    try{await Notification.requestPermission()}catch{}
+  }
+  function saveTask(e){
+    e.preventDefault();const id=$("workdayTaskId").value,list=tasks(),old=list.find(t=>t.id===id);
+    const task={id:id||uid(),date:today(),title:$("workdayTaskTitle").value.trim(),priority:$("workdayTaskPriority").value,due:$("workdayTaskDue").value,reminder:$("workdayTaskReminder").value,reminderBefore:Number($("workdayTaskReminderBefore").value||0),reminderAtStart:$("workdayTaskReminderAtStart").checked,repeat:$("workdayTaskRepeat").value,repeatDays:[...document.querySelectorAll("#workdayRepeatDays input:checked")].map(x=>Number(x.value)),repeatEnabled:$("workdayTaskRepeatEnabled").checked,type:$("workdayTaskType").value,assignee:$("workdayTaskAssignee").value.trim(),why:$("workdayTaskWhy").value.trim(),steps:$("workdayTaskSteps").value.split("\n").map(x=>x.trim()).filter(Boolean),module:$("workdayTaskModule").value,status:old?.status||"not_started",done:old?.done||false,archived:old?.archived||false,startedAt:old?.startedAt||null,completedAt:old?.completedAt||null,reminderNotifiedAt:old?.reminder===$("workdayTaskReminder").value?old?.reminderNotifiedAt:null,preReminderNotifiedAt:(old?.due===$("workdayTaskDue").value&&Number(old?.reminderBefore||0)===Number($("workdayTaskReminderBefore").value||0))?old?.preReminderNotifiedAt:null,startReminderNotifiedAt:(old?.due===$("workdayTaskDue").value&&old?.reminderAtStart===$("workdayTaskReminderAtStart").checked)?old?.startReminderNotifiedAt:null,createdAt:old?.createdAt||Date.now()};
+    if(!task.title)return;
+    if(task.repeat!=="once"){
+      const defs=templates(); const existingTemplateId=old?.templateId||old?.id?.startsWith("tpl_")&&old.id; const templateId=existingTemplateId||`tpl_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+      const def={...task,id:templateId,templateId:null,date:null,status:"not_started",done:false,archived:false,startedAt:null,pausedAt:null,completedAt:null,enabled:task.repeatEnabled!==false};
+      const di=defs.findIndex(x=>x.id===templateId);di>=0?defs[di]=def:defs.push(def);saveTemplates(defs);task.templateId=templateId;
+    }
+    const idx=list.findIndex(t=>t.id===task.id);idx>=0?list[idx]=task:list.push(task);saveDay(list);$("workdayEditor").hidden=true;maybeEnableNotifications(task.reminder||task.reminderBefore||task.reminderAtStart);render();if(typeof toast==="function")toast(id?"Task updated":"Task added");
+  }
+  function renderRoadmaps(){const box=$("workdayRoadmapList");box.innerHTML=roadmaps().map(r=>`<div class="workday-roadmap-card" data-roadmap-id="${esc(r.id)}"><h4>${esc(r.title)}</h4><p>${r.steps.length} tasks • reusable roadmap</p><div class="workday-roadmap-assign"><input type="text" placeholder="Assign to teammate (or Me)" aria-label="Assignee"><button type="button" class="primary" data-roadmap-assign="${esc(r.id)}">Assign Today</button>${r.builtin?"":`<button type="button" class="secondary" data-roadmap-delete="${esc(r.id)}">Delete</button>`}</div></div>`).join("")}
+  function assignRoadmap(id,card){const r=roadmaps().find(x=>x.id===id);if(!r)return;const assignee=card.querySelector("input")?.value.trim()||"Me",list=tasks();r.steps.forEach((title,i)=>list.push({id:uid(),date:today(),title,priority:i<2?"High":"Medium",due:"",reminder:"",type:"assigned",assignee,why:"",steps:[],module:/shrink/i.test(title)?"shrink":/back stock/i.test(title)?"order":/final order/i.test(title)?"frontStock":"",status:"not_started",done:false,archived:false,startedAt:null,completedAt:null,createdAt:Date.now()+i}));saveDay(list);$("workdayRoadmaps").hidden=true;render();if(typeof toast==="function")toast(`${r.title} assigned to ${assignee}`)}
+
+  function ensureNotificationStack(){
+    let stack=document.getElementById("workdayNotificationStack");
+    if(!stack){stack=document.createElement("div");stack.id="workdayNotificationStack";stack.className="workday-notification-stack";stack.setAttribute("aria-live","polite");document.body.appendChild(stack)}
+    return stack;
+  }
+  function showInAppReminder(t,message){
+    const stack=ensureNotificationStack(),note=document.createElement("div");note.className="workday-notification";note.dataset.taskId=t.id;
+    note.innerHTML=`<div class="workday-notification-head"><div><span class="workday-notification-kicker">TASK REMINDER</span><h4>${esc(t.title)}</h4><p>${esc(message)}</p></div><button class="workday-notification-close" type="button" aria-label="Dismiss">✕</button></div><div class="workday-notification-actions">${t.status==="not_started"?'<button type="button" class="secondary" data-notify-start>Start</button>':""}${t.module?'<button type="button" class="secondary" data-notify-open>Open</button>':""}<button type="button" class="primary" data-notify-dismiss>Dismiss</button></div>`;
+    note.onclick=e=>{if(e.target.closest("[data-notify-start]")){startTask(t.id);note.remove()}else if(e.target.closest("[data-notify-open]")){openModule(t.module);note.remove()}else if(e.target.closest("[data-notify-dismiss],.workday-notification-close"))note.remove()};
+    stack.appendChild(note);setTimeout(()=>note.remove(),30000);
+  }
+  function sendReminder(t,message){
+    showInAppReminder(t,message);
+    if("Notification" in window&&Notification.permission==="granted"){try{new Notification("My Produce Assistant",{body:`${t.title} — ${message}`})}catch{}}
+  }
+  function minutesOf(time){if(!time)return null;const [h,m]=time.split(":").map(Number);return h*60+m}
+  function checkReminders(){
+    const now=new Date(),nowMin=now.getHours()*60+now.getMinutes(),list=tasks();let changed=false;
+    list.forEach(t=>{
+      if(t.archived||t.status==="completed")return;
+      const dueMin=minutesOf(t.due),customMin=minutesOf(t.reminder);
+      if(dueMin!==null&&t.reminderBefore>0&&!t.preReminderNotifiedAt&&nowMin>=dueMin-t.reminderBefore&&nowMin<dueMin){t.preReminderNotifiedAt=Date.now();changed=true;sendReminder(t,`Starts in ${t.reminderBefore} minute${t.reminderBefore===1?"":"s"}.`)}
+      if(dueMin!==null&&t.reminderAtStart&&!t.startReminderNotifiedAt&&nowMin>=dueMin){t.startReminderNotifiedAt=Date.now();changed=true;sendReminder(t,"Task time is starting now.")}
+      if(customMin!==null&&!t.reminderNotifiedAt&&nowMin>=customMin){t.reminderNotifiedAt=Date.now();changed=true;sendReminder(t,"Your custom reminder is due now.")}
+    });
+    if(changed)saveDay(list);
+  }
+
+  function handleAction(e,scope){
+    const start=e.target.closest("[data-wd-start]");if(start){startTask(start.dataset.wdStart);return true}
+    const done=e.target.closest("[data-wd-done]");if(done){completeTask(done.dataset.wdDone);return true}
+    const undo=e.target.closest("[data-wd-undo]");if(undo){undoTask(undo.dataset.wdUndo);return true}
+    const archive=e.target.closest("[data-wd-archive]");if(archive){archiveTask(archive.dataset.wdArchive);return true}
+    const restore=e.target.closest("[data-wd-restore]");if(restore){restoreTask(restore.dataset.wdRestore);return true}
+    const open=e.target.closest("[data-wd-open]");if(open){const host=open.closest("[data-wd-id]");openModule(open.dataset.wdOpen,host?.dataset.wdId);return true}
+    return false;
+  }
+
+  function toggleRepeatDays(){const box=$("workdayRepeatDays");if(box)box.hidden=$("workdayTaskRepeat").value!=="custom"}
+  function installNavigationGuard(){
+    window.__workdayNavigationGuard=(target)=>{
+      const ctx=activeContext(); if(!ctx||target===ctx.module)return true;
+      const task=tasks().find(t=>t.id===ctx.taskId); if(!task||task.status==="completed"){clearActiveContext();return true}
+      const modal=$("workdayStatusPrompt"); $("workdayStatusPromptText").textContent=`${ctx.title}: completed, still in progress, or paused?`;modal.hidden=false;
+      const leave=(status)=>{modal.hidden=true;if(status==="completed")completeTask(ctx.taskId);else if(status==="paused")pauseTask(ctx.taskId);clearActiveContext();window.AppRouter?.navigate(target,{bypassGuard:true})};
+      $("workdayPromptCompleted").onclick=()=>leave("completed");$("workdayPromptProgress").onclick=()=>leave("progress");$("workdayPromptPaused").onclick=()=>leave("paused");$("workdayPromptStay").onclick=()=>{modal.hidden=true};
+      return false;
+    };
+  }
+
+  function init(){
+    if(!$("workdayView"))return;
+    $("workdayAddTaskBtn").onclick=()=>showEditor();$("workdayEditorClose").onclick=()=>$("workdayEditor").hidden=true;$("workdayTaskForm").onsubmit=saveTask;
+    $("workdayRoadmapBtn").onclick=()=>{$("workdayRoadmaps").hidden=false;$("workdayEditor").hidden=true;renderRoadmaps();$("workdayRoadmaps").scrollIntoView({behavior:"smooth",block:"start"})};$("workdayRoadmapsClose").onclick=()=>$("workdayRoadmaps").hidden=true;
+    $("workdayRoadmapForm").onsubmit=e=>{e.preventDefault();const title=$("workdayRoadmapTitle").value.trim(),steps=$("workdayRoadmapSteps").value.split("\n").map(x=>x.trim()).filter(Boolean);if(!title||!steps.length)return;const list=read(ROADMAP_KEY);list.push({id:uid(),title,steps});write(ROADMAP_KEY,list);e.target.reset();renderRoadmaps();if(typeof toast==="function")toast("Roadmap saved")};
+    $("workdayRoadmapList").onclick=e=>{const assign=e.target.closest("[data-roadmap-assign]");if(assign)return assignRoadmap(assign.dataset.roadmapAssign,assign.closest(".workday-roadmap-card"));const del=e.target.closest("[data-roadmap-delete]");if(del&&confirm("Delete this roadmap?")){write(ROADMAP_KEY,read(ROADMAP_KEY).filter(r=>r.id!==del.dataset.roadmapDelete));renderRoadmaps()}};
+    $("workdayTaskList").onclick=e=>{if(handleAction(e))return;const edit=e.target.closest("[data-wd-edit]");if(edit)return showEditor(tasks().find(t=>t.id===edit.dataset.wdEdit));const del=e.target.closest("[data-wd-delete]");if(del&&confirm("Remove this task permanently?")){saveDay(tasks().filter(t=>t.id!==del.dataset.wdDelete));render()}};
+    $("workdayNextTask").onclick=e=>handleAction(e);
+    $("dashWorkdayNext")?.addEventListener("click",e=>{
+      const card=e.target.closest("[data-dash-wd-id]");if(!card)return;
+      if(e.target.closest("[data-dash-wd-start]"))return startTask(card.dataset.dashWdId);
+      if(e.target.closest("[data-dash-wd-done]"))return completeTask(card.dataset.dashWdId);
+      const open=e.target.closest("[data-dash-wd-open]");if(open)return openModule(open.dataset.dashWdOpen,card.dataset.dashWdId);
+    });
+    $("dashGoWorkdayBtn")?.addEventListener("click",()=>{if(typeof switchView==="function")switchView("workday")});
+    document.querySelectorAll("[data-workday-filter]").forEach(b=>b.onclick=()=>{document.querySelectorAll("[data-workday-filter]").forEach(x=>x.classList.remove("active"));b.classList.add("active");filter=b.dataset.workdayFilter;render()});
+    window.addEventListener("app:viewchange",()=>{renderDashboardWorkday();if($("workdayView").classList.contains("active"))render()});
+    window.addEventListener("workday:changed",renderDashboardWorkday);
+    $("workdayTaskRepeat").addEventListener("change",toggleRepeatDays);
+    materializeRecurring();
+    installNavigationGuard();
+    setInterval(()=>{materializeRecurring();checkReminders()},30000);
+    render();checkReminders();
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
+})();
+
+
+/* v53.0.5 Notification Center */
+(function(){
+  const KEY="mpa_notifications_v1", TASK_KEY="mpa_workday_tasks_v1";
+  const $=id=>document.getElementById(id);
+  const read=(k,f=[])=>{try{const v=JSON.parse(localStorage.getItem(k)||"null");return Array.isArray(v)?v:f}catch{return f}};
+  const write=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+  const esc=v=>String(v??"").replace(/[&<>\"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'\"':"&quot;","'":"&#39;"}[c]));
+  const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`};
+  const uid=()=>`nt_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+  function list(){return read(KEY)}
+  function save(v){write(KEY,v);render()}
+  function taskList(){return read(TASK_KEY)}
+  function addNotification(n){
+    const items=list();
+    const dedupe=n.dedupeKey&&items.some(x=>x.dedupeKey===n.dedupeKey);
+    if(dedupe)return;
+    items.unshift({id:uid(),createdAt:Date.now(),read:false,dismissed:false,...n});
+    write(KEY,items.slice(0,100)); render();
+  }
+  function taskTime(date,time){if(!date||!time)return null;const d=new Date(`${date}T${time}:00`);return isNaN(d)?null:d.getTime()}
+  function generateMissed(){
+    const now=Date.now(), tasks=taskList(), existing=list();
+    let changed=false;
+    tasks.forEach(t=>{
+      if(t.date!==today()||t.archived||t.status==="completed")return;
+      const reminder=t.reminder||t.reminderTime||"";
+      if(!reminder)return;
+      const ts=taskTime(t.date,reminder); if(!ts||ts>now)return;
+      const key=`missed:${t.id}:${t.date}:${reminder}`;
+      if(existing.some(n=>n.dedupeKey===key))return;
+      existing.unshift({id:uid(),createdAt:Date.now(),read:false,dismissed:false,type:"missed_reminder",taskId:t.id,title:"Missed task reminder",message:`${t.title} reminder was due at ${new Date(ts).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}.`,dedupeKey:key,module:t.module||""});
+      changed=true;
+    });
+    if(changed){write(KEY,existing.slice(0,100));render()}
+  }
+  function render(){
+    const items=list().filter(n=>!n.dismissed), unread=items.filter(n=>!n.read).length;
+    const badge=$("notificationBadge"); if(badge){badge.hidden=!unread;badge.textContent=unread>99?"99+":String(unread)}
+    const summary=$("notificationPanelSummary"); if(summary)summary.textContent=unread?`${unread} unread notification${unread===1?"":"s"}`:"You're all caught up.";
+    const box=$("notificationList"); if(!box)return;
+    box.innerHTML=items.length?items.map(n=>`<article class="notification-item ${n.read?"":"is-unread"}" data-notification-id="${esc(n.id)}">
+      <div class="notification-dot"></div>
+      <div class="notification-copy"><div class="notification-title-row"><strong>${esc(n.title||"Notification")}</strong><small>${new Date(n.createdAt).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</small></div><p>${esc(n.message||"")}</p>
+      <div class="notification-actions">${n.taskId?`<button type="button" class="primary" data-notification-task="${esc(n.taskId)}">View Task</button>`:""}${n.module?`<button type="button" class="secondary" data-notification-open="${esc(n.module)}">Open</button>`:""}${!n.read?`<button type="button" class="secondary" data-notification-read="${esc(n.id)}">Mark read</button>`:""}<button type="button" class="secondary" data-notification-dismiss="${esc(n.id)}">Dismiss</button></div></div>
+    </article>`).join(""):'<div class="notification-empty"><span>✓</span><strong>No notifications</strong><small>Missed reminders and task alerts will appear here.</small></div>';
+  }
+  function openPanel(){
+    const p=$("notificationPanel"),b=$("notificationBellBtn");if(!p)return;
+    p.hidden=false;b?.setAttribute("aria-expanded","true");generateMissed();render();
+  }
+  function closePanel(){const p=$("notificationPanel"),b=$("notificationBellBtn");if(p)p.hidden=true;b?.setAttribute("aria-expanded","false")}
+  function markRead(id){const a=list();const n=a.find(x=>x.id===id);if(n)n.read=true;save(a)}
+  function dismiss(id){const a=list();const n=a.find(x=>x.id===id);if(n)n.dismissed=true;save(a)}
+  function init(){
+    if(!$("notificationBellBtn"))return;
+    $("notificationBellBtn").onclick=e=>{e.stopPropagation();$("notificationPanel").hidden?openPanel():closePanel()};
+    $("notificationPanelClose").onclick=closePanel;
+    $("notificationMarkAllRead").onclick=()=>{const a=list();a.forEach(n=>n.read=true);save(a)};
+    $("notificationPanel").onclick=e=>{
+      e.stopPropagation();
+      const r=e.target.closest("[data-notification-read]");if(r)return markRead(r.dataset.notificationRead);
+      const d=e.target.closest("[data-notification-dismiss]");if(d)return dismiss(d.dataset.notificationDismiss);
+      const t=e.target.closest("[data-notification-task]");if(t){markRead(t.closest("[data-notification-id]").dataset.notificationId);closePanel();if(typeof switchView==="function")switchView("workday");return}
+      const o=e.target.closest("[data-notification-open]");if(o){markRead(o.closest("[data-notification-id]").dataset.notificationId);closePanel();if(typeof switchView==="function")switchView(o.dataset.notificationOpen);return}
+    };
+    document.addEventListener("click",e=>{if(!$("notificationPanel").hidden&&!e.target.closest("#notificationPanel")&&!e.target.closest("#notificationBellBtn"))closePanel()});
+    window.addEventListener("workday:changed",generateMissed);
+    window.addEventListener("focus",generateMissed);
+    document.addEventListener("visibilitychange",()=>{if(!document.hidden)generateMissed()});
+    window.MPANotifications={add:addNotification,generateMissed};
+    generateMissed();render();
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
 })();
